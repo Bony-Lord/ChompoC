@@ -1,2 +1,13 @@
 let result42 = 12.5;
 print(result42, "another_value"); // idk what is it
+
+let x = 10;
+let y = 20;
+
+print(x == y);
+print(x != y);
+print(x < y);
+print(x <= y);
+print(x > y);
+print(x >= y);
+print(!x);

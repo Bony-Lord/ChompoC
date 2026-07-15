@@ -143,7 +143,23 @@ void Lexer::scan_token() {
             break;
 
         case '=':
-            add_token(TokenType::Equal);
+            if (match('=')) add_token(TokenType::EqualEqual);
+            else add_token(TokenType::Equal);
+            break;
+
+        case '!':
+            if (match('=')) add_token(TokenType::NotEqual);
+            else add_token(TokenType::Not);
+            break;
+
+        case '<':
+            if (match('=')) add_token(TokenType::LessEqual);
+            else add_token(TokenType::Less);
+            break;
+
+        case '>':
+            if (match('=')) add_token(TokenType::GreaterEqual);
+            else add_token(TokenType::Greater);
             break;
 
         case '"':

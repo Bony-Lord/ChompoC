@@ -16,6 +16,13 @@ enum class TokenType {
     Slash, // /
 
     Equal, // =
+    EqualEqual, //==
+    NotEqual, // !=
+    Not, // !
+    Less, // <
+    LessEqual, // <=
+    Greater, // >
+    GreaterEqual, // >=
 
     // Литералы и имена
     Identifier,

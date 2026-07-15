@@ -14,6 +14,13 @@ std::string_view token_type_name(TokenType type) {
         case TokenType::Slash: return "Slash";
 
         case TokenType::Equal: return "Equal";
+        case TokenType::EqualEqual: return "EqualEqual";
+        case TokenType::NotEqual: return "NotEqual";
+        case TokenType::Not: return "Not";
+        case TokenType::Less: return "Less";
+        case TokenType::LessEqual: return "LessEqual";
+        case TokenType::Greater: return "Greater";
+        case TokenType::GreaterEqual: return "GreaterEqual";
 
         case TokenType::Identifier: return "Identifier";
         case TokenType::Number: return "Number";
