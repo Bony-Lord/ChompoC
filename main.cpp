@@ -1,5 +1,7 @@
 #include "lexer.h"
 #include "token.h"
+#include "parser.h"
+#include "ast_printer.h"
 
 #include <exception>
 #include <fstream>
@@ -45,6 +47,13 @@ int main() {
                 << std::quoted(token.lexeme)
                 << '\n';
         }
+
+        Parser parser(std::move(tokens));
+        ExprPtr tree = parser.parse();
+
+        AstPrinter printer;
+        std::cout << printer.print(*tree) << '\n';
+
     } catch (const std::exception& exception) {
         std::cerr << exception.what() << '\n';
         return 1;

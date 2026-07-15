@@ -54,6 +54,10 @@ enum class TokenType {
     Null,
     Fun,
     In,
+
+
+
+    Count
 };
 
 struct SourcePosition {

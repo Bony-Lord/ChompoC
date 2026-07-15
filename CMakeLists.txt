@@ -7,4 +7,9 @@ add_executable(Chompo main.cpp
         token.h
         token.cpp
         lexer.h
-        lexer.cpp)
+        lexer.cpp
+        ast.h
+        parser.h
+        parser.cpp
+        ast_printer.h
+        ast_printer.cpp)
