@@ -13,5 +13,5 @@ let numbers[] = {1, 2, 3, 4};
 if (sum(numbers) >= 10 && true) {
     print("large");
 } else {
-    print(null);
+    print(NULL);
 }
