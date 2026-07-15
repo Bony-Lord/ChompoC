@@ -1,13 +1,17 @@
-let result42 = 12.5;
-print(result42, "another_value"); // idk what is it
+fun sum(values) {
+    let result = 0;
 
-let x = 10;
-let y = 20;
+    for (value in values) {
+        result = result + value;
+    }
 
-print(x == y);
-print(x != y);
-print(x < y);
-print(x <= y);
-print(x > y);
-print(x >= y);
-print(!x);
+    return result;
+}
+
+let numbers[] = {1, 2, 3, 4};
+
+if (sum(numbers) >= 10 && true) {
+    print("large");
+} else {
+    print(null);
+}

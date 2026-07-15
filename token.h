@@ -38,7 +38,7 @@ enum class TokenType {
     String,
 
     // Ключевые слова
-    Let,
+    Var,
     Print,
     EndOfFile,
     Return,

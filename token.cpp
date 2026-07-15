@@ -34,7 +34,7 @@ std::string_view token_type_name(TokenType type) {
         case TokenType::Number: return "Number";
         case TokenType::String: return "String";
 
-        case TokenType::Let: return "Let";
+        case TokenType::Var: return "Var";
         case TokenType::Print: return "Print";
         case TokenType::EndOfFile: return "EndOfFile";
         case TokenType::True: return "True";

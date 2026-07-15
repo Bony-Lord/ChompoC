@@ -6,8 +6,19 @@
 
 namespace {
     const std::unordered_map<std::string, TokenType> keywords {
-        {"let", TokenType::Let},
-        {"print", TokenType::Print}
+        {"var", TokenType::Var},
+        {"print", TokenType::Print},
+        {"if", TokenType::If},
+        {"else", TokenType::Else},
+        {"while", TokenType::While},
+        {"for", TokenType::For},
+        {"return", TokenType::Return},
+        {"break", TokenType::Break},
+        {"continue", TokenType::Continue},
+        {"fun", TokenType::Fun},
+        {"true", TokenType::True},
+        {"false", TokenType::False},
+        {"NULL", TokenType::Null},
     };
 }
 
@@ -108,8 +119,28 @@ void Lexer::scan_token() {
             add_token(TokenType::RightParen);
             break;
 
+        case '{':
+            add_token(TokenType::LeftBrace);
+            break;
+
+        case '}':
+            add_token(TokenType::RightBrace);
+            break;
+
+        case '[':
+            add_token(TokenType::LeftBracket);
+            break;
+
+        case ']':
+            add_token(TokenType::RightBracket);
+            break;
+
         case ';':
             add_token(TokenType::Semicolon);
+            break;
+
+        case ':':
+            add_token(TokenType::Colon);
             break;
 
         case ',':
@@ -142,6 +173,10 @@ void Lexer::scan_token() {
             }
             break;
 
+        case '%':
+            add_token(TokenType::Percent);
+            break;
+
         case '=':
             if (match('=')) add_token(TokenType::EqualEqual);
             else add_token(TokenType::Equal);
@@ -164,6 +199,16 @@ void Lexer::scan_token() {
 
         case '"':
             string_literal();
+            break;
+
+        case '&':
+            if (!match('&')) error("expected '&' after '&'");
+            else add_token(TokenType::AndAnd);
+            break;
+
+        case '|':
+            if (!match('|')) error("expected '|' after '|'");
+            else add_token(TokenType::OrOr);
             break;
 
         case ' ':
