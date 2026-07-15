@@ -12,4 +12,12 @@ add_executable(Chompo main.cpp
         parser.h
         parser.cpp
         ast_printer.h
-        ast_printer.cpp)
+        ast_printer.cpp
+        value.h
+        value.cpp
+        runtime_error.h
+        runtime_error.cpp
+        environment.h
+        environment.cpp
+        interpreter.h
+        interpreter.cpp)
