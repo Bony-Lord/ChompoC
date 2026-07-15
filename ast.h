@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <variant>
+#include <vector>
 
 struct Expr;
 
@@ -39,4 +40,38 @@ struct Expr {
 
     template <class T>
     explicit Expr(T value) : node(std::move(value)) {}
+};
+
+struct Stmt;
+
+using StmtPtr = std::unique_ptr<Stmt>;
+using Program = std::vector<StmtPtr>;
+
+struct ExpressionStmt {
+    ExprPtr expression;
+};
+
+struct VarStmt {
+    Token name;
+    bool is_array;
+    ExprPtr initializer;
+};
+
+struct PrintStmt {
+    std::vector<ExprPtr> arguments;
+};
+
+struct BlockStmt {
+    std::vector<StmtPtr> statements;
+};
+
+struct Stmt {
+    using Node = std::variant<PrintStmt, BlockStmt, VarStmt, ExpressionStmt>;
+
+    Node node;
+    
+    template<class T>
+    explicit Stmt(T value)
+        : node(std::move(value)) {
+    }
 };

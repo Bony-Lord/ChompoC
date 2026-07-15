@@ -49,10 +49,12 @@ int main() {
         }
 
         Parser parser(std::move(tokens));
-        ExprPtr tree = parser.parse();
+        Program program = parser.parse();
 
-        AstPrinter printer;
-        std::cout << printer.print(*tree) << '\n';
+        std::cout
+            << "Parsed "
+            << program.size()
+            << " top-level statements\n";
 
     } catch (const std::exception& exception) {
         std::cerr << exception.what() << '\n';

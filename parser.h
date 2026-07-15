@@ -12,7 +12,7 @@ class Parser {
 public:
     explicit Parser(std::vector<Token> tokens);
 
-    ExprPtr parse();
+    Program parse();
 private:
     enum class Precedence {
         None,
@@ -40,6 +40,16 @@ private:
 
     std::vector<Token> tokens_;
     std::size_t current_ = 0;
+
+    StmtPtr declaration();
+    StmtPtr var_declaration();
+
+    StmtPtr statement();
+    StmtPtr expression_statement();
+    StmtPtr print_statement();
+    StmtPtr block_statement();
+
+    std::vector<StmtPtr> block();
 
     ExprPtr expression();
     ExprPtr parse_precedence(Precedence precedence);

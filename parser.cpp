@@ -247,13 +247,90 @@ ExprPtr Parser::binary(ExprPtr left) {
     return std::make_unique<Expr>(BinaryExpr(std::move(left), operation, std::move(right)));
 }
 
-ExprPtr Parser::parse() {
-    ExprPtr result = expression();
+Program Parser::parse() {
+    Program program;
 
-    consume(
-        TokenType::EndOfFile,
-        "expected end of file after expression"
-    );
+    while (!is_at_end()) {
+        program.push_back(declaration());
+    }
 
-    return result;
+    return program;
+}
+
+StmtPtr Parser::declaration() {
+    if (match({TokenType::Var})) {
+        return var_declaration();
+    }
+
+    return statement();
+}
+
+StmtPtr Parser::var_declaration() {
+    const Token name = consume(TokenType::Identifier, "expected variable name after 'var'");
+
+    bool is_array = false;
+    if (match({TokenType::LeftBracket})) {
+        consume(TokenType::RightBracket, "expected ']' after '[' in array declaration");
+        is_array = true;
+    }
+
+    ExprPtr initializer;
+
+    if (match({TokenType::Equal})) {
+        initializer = expression();
+    }
+
+    consume(TokenType::Semicolon, "expected ';' after variable declaration");
+
+    return std::make_unique<Stmt>(VarStmt{name, is_array, std::move(initializer)});
+}
+
+StmtPtr Parser::statement() {
+    if (match({TokenType::Print})) {
+        return print_statement();
+    }
+    if (match({TokenType::LeftBrace})) {
+        return block_statement();
+    }
+    return expression_statement();
+}
+
+StmtPtr Parser::print_statement() {
+    consume(TokenType::LeftParen, "expected '(' after 'print'");
+
+    std::vector<ExprPtr> arguments;
+
+    if (!check(TokenType::RightParen)) {
+        do {
+            arguments.push_back(expression());
+        } while (match({TokenType::Comma}));
+    }
+    consume(TokenType::RightParen, "expected ')' after print arguments");
+
+    consume(TokenType::Semicolon, "expected ';' after print statement");
+
+    return std::make_unique<Stmt>(PrintStmt{std::move(arguments)});
+}
+
+StmtPtr Parser::expression_statement() {
+    ExprPtr value = expression();
+
+    consume(TokenType::Semicolon, "expected ';' after expression");
+
+    return std::make_unique<Stmt>(ExpressionStmt{std::move(value)});
+}
+
+StmtPtr Parser::block_statement() {
+    return std::make_unique<Stmt>(BlockStmt{block()});
+}
+
+std::vector<StmtPtr> Parser::block() {
+    std::vector<StmtPtr> statements;
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        statements.push_back(declaration());
+    }
+
+    consume(TokenType::RightBrace, "expected '}' after block");
+    return statements;
 }
