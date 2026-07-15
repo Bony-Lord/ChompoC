@@ -1,2 +1,2 @@
 let result42 = 12.5;
-print(result42, "another_value");
+print(result42, "another_value"); // idk what is it

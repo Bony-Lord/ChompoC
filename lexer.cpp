@@ -58,7 +58,7 @@ bool Lexer::is_alpha(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <
 bool Lexer::is_alpha_numeric(char c) { return is_alpha(c) || is_digit(c); }
 
 bool Lexer::match(char c) {
-    if (peek() == c) return false;
+    if (peek() != c) return false;
     advance();
     return true;
 }
