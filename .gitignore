@@ -1,0 +1,78 @@
+# Игнорирование объектов и скомпилированных файлов
+*.slo
+*.o
+*.obj
+*.d
+*.gch
+*.pch
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# Исполняемые файлы
+*.exe
+*.out
+*.app
+*.i?86
+*.x86_64
+*.hex
+
+# Папки сборок
+build/
+build-*/
+cmake-build-*/
+
+# Файлы CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+# Файлы профилирования и отладки
+*.gcno
+*.gcda
+*.gcov
+*.lcov
+*.ilk
+*.sbr
+*.pdb
+*.idb
+
+# Настройки IDE и операционных систем
+# (macOS)
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# (Linux)
+._*
+.Trash-*
+.fuse_hidden*
+
+# (Windows)
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# (Visual Studio)
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.opendb
+*.VC.db
+ipch/
+
+# (VS Code)
+.vscode/
+*.code-workspace
+
+# (CLion)
+.idea/
