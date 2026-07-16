@@ -269,6 +269,10 @@ Value Interpreter::evaluate_node(const BinaryExpr& expression) {
             return Value(std::get<std::string>(left.data) +
                 std::get<std::string>(right.data));
         }
+        if (left.is_bool() && right.is_bool()) {
+            return Value(std::get<bool>(left.data) or
+                std::get<bool>(right.data));
+        }
 
         binary_type_error(expression.operation, left, right);
 
@@ -277,12 +281,22 @@ Value Interpreter::evaluate_node(const BinaryExpr& expression) {
             binary_type_error(expression.operation, left, right);
         }
 
+        if (left.is_bool() && right.is_bool()) {
+            return Value(std::get<bool>(left.data) or
+                !std::get<bool>(right.data));
+        }
+
         return Value(std::get<std::int64_t>(left.data) -
             std::get<std::int64_t>(right.data));
 
     case TokenType::Star:
         if (!left.is_integer() || !right.is_integer()) {
             binary_type_error(expression.operation, left, right);
+        }
+
+        if (left.is_bool() && right.is_bool()) {
+            return Value(std::get<bool>(left.data) and
+                std::get<bool>(right.data));
         }
 
         return Value(std::get<std::int64_t>(left.data) *

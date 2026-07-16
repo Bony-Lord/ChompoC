@@ -7,8 +7,8 @@ print("result: ", result, " numbers: ", numbers, "\n");
 //sum(numbers, result);
 var a = true;
 var b = false;
-b += a;
-print("a + b (true + false)="b, "\n");
+
+print("a + b(true + false)="b, "\n");
 {
     var inner = 42;
     print("inner = ", inner, "\n");
