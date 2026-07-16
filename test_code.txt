@@ -3,12 +3,12 @@ var numbers[] = {1, 2 + 3, 4};
 
 result = result + 10;
 
-print(result, numbers);
-sum(numbers, result);
+print(result, " ", numbers, "\n");
+//sum(numbers, result);
 
 {
     var inner = 42;
-    print(inner);
+    print(inner, "\n");
 }
 
 if (true) {

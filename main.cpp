@@ -2,6 +2,7 @@
 #include "token.h"
 #include "parser.h"
 #include "ast_printer.h"
+#include "interpreter.h"
 
 #include <exception>
 #include <fstream>
@@ -54,6 +55,9 @@ int main() {
         std::cout << "Parsed " << program.size() << " top-level statements\n";
         AstPrinter printer;
         std::cout << printer.print(program);
+
+        Interpreter interpreter(std::cout);
+        interpreter.interpret(program);
 
     } catch (const std::exception& exception) {
         std::cerr << exception.what() << '\n';

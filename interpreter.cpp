@@ -293,3 +293,56 @@ Value Interpreter::evaluate_node(const BinaryExpr& expression) {
 
     throw RuntimeError(expression.operation, "invalid binary operation");
 }
+
+Value Interpreter::evaluate_node(const CallExpr& expression) {
+    throw RuntimeError(expression.closing_parenthesis, "Interpreter: functions are not supported yet");
+}
+
+void Interpreter::execute_node(const ExpressionStmt& statement) {
+    evaluate(*statement.expression);
+}
+
+void Interpreter::execute_node(const VarStmt& statement) {
+    Value value = statement.is_array ? Value(std::make_shared<ArrayValue>()) : Value(nullptr);
+
+    if (statement.initializer) value = evaluate(*statement.initializer);
+    if (statement.is_array && !value.is_array()) {
+        throw RuntimeError(statement.name, "array variable requires an array initializer");
+    }
+    if (!statement.is_array && value.is_array()) {
+        throw RuntimeError(statement.name, "non-array variable cannot contain an array");
+    }
+
+    environment_->define(statement.name, std::move(value));
+}
+
+void Interpreter::execute_node(const PrintStmt& statement) {
+    for (const auto& arg : statement.arguments) {
+        output_ << evaluate(*arg).to_string();
+    }
+}
+
+void Interpreter::execute_node(const BlockStmt& statement) {
+    execute_block(statement.statements, std::make_shared<Environment>(environment_));
+}
+
+void Interpreter::execute_block(const std::vector<StmtPtr>& statements, std::shared_ptr<Environment> environment) {
+    const std::shared_ptr<Environment> previous = environment_;
+    environment_ = std::move(environment);
+
+    try {
+        for (const StmtPtr& statement : statements) execute(*statement);
+    } catch (...) {
+        environment_ = previous;
+        throw;
+    }
+    environment_ = previous;
+}
+
+void Interpreter::execute_node(const IfStmt& statement) {
+    if (evaluate(*statement.condition).is_truthy()) {
+        execute(*statement.then_branch);
+        return;
+    }
+    if (statement.else_branch) execute(*statement.else_branch);
+}
