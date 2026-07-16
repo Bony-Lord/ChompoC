@@ -118,7 +118,7 @@ namespace {
     }
 
     bool can_convert_to_string_implicitly(const Value &value) {
-        return value.is_null() || value.is_bool() || value.is_number() ||
+        return value.is_null() || value.is_number() ||
                value.is_string();
     }
 
