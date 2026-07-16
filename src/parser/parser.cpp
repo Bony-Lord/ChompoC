@@ -125,6 +125,31 @@ const Parser::ParseRule& Parser::get_rule(TokenType type) {
             nullptr,
             Precedence::None
         };
+        // += -= *= /=
+        result[token_index(TokenType::PlusEq)] = {
+            nullptr,
+            &Parser::assignment,
+            Precedence::Assignment
+        };
+
+        result[token_index(TokenType::MinusEq)] = {
+            nullptr,
+            &Parser::assignment,
+            Precedence::Assignment
+        };
+
+        result[token_index(TokenType::PowEq)] = {
+            nullptr,
+            &Parser::assignment,
+            Precedence::Assignment
+        };
+
+        result[token_index(TokenType::DivideEq)] = {
+            nullptr,
+            &Parser::assignment,
+            Precedence::Assignment
+        };
+
         // Сложение
         result[token_index(TokenType::Plus)] = {
             nullptr,
@@ -281,7 +306,7 @@ ExprPtr Parser::assignment(ExprPtr left) {
 
     ExprPtr value = parse_precedence(Precedence::Assignment);
 
-    return std::make_unique<Expr>(AssignmentExpr{ name, std::move(value) });
+    return std::make_unique<Expr>(AssignmentExpr{ name, operation, std::move(value) });
 }
 
 ExprPtr Parser::call(ExprPtr callee) {

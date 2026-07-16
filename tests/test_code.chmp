@@ -2,10 +2,13 @@ var result = 0;
 var numbers[] = {1, 2 + 3, 4};
 
 result = result + 10;
-
-print(result, " ", numbers, "\n");
+result += 5;
+print("result: ", result, " numbers: ", numbers, "\n");
 //sum(numbers, result);
-
+var a = true;
+var b = false;
+b += a;
+print("a + b (true + false)="b, "\n");
 {
     var inner = 42;
     print("inner = ", inner, "\n");

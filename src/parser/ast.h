@@ -33,8 +33,10 @@ struct GroupingExpr {
     ExprPtr expression;
 };
 
+
 struct AssignmentExpr {
     Token name;
+    Token op;
     ExprPtr value;
 };
 
