@@ -32,7 +32,7 @@ std::string_view token_type_name(TokenType type) {
         return "PlusEq";
     case TokenType::MinusEq:
         return "MinusEq";
-    case TokenType::PowEq:
+    case TokenType::MulEq:
         return "PowEq";
     case TokenType::DivideEq:
         return "DivideEq";

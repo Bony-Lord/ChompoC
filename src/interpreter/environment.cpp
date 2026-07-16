@@ -8,7 +8,7 @@ Environment::Environment(std::shared_ptr<Environment> parent)
 
 void Environment::define(const Token &name, Value value) {
     if (values_.contains(name.lexeme)) {
-        throw RuntimeError(name, "variable'" + name.lexeme +
+        throw RuntimeError(name, "variable '" + name.lexeme +
                                      "' is already declared in this scope");
     }
     values_.emplace(name.lexeme, std::move(value));

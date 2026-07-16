@@ -114,14 +114,28 @@ void Lexer::identifier() {
 }
 
 void Lexer::string_literal() {
-    while (peek() != '"' && !is_at_end()) {
+    while (!is_at_end()) {
+        if (peek() == '"') {
+            advance();
+            add_token(TokenType::String);
+            return;
+        }
+
+        if (peek() == '\\') {
+            advance();
+
+            if (is_at_end()) {
+                error("unfinished escape sequence");
+            }
+
+            advance();
+            continue;
+        }
+
         advance();
     }
-    if (is_at_end()) {
-        error("unterminated string literal");
-    }
-    advance();
-    add_token(TokenType::String);
+
+    error("unterminated string literal");
 }
 
 void Lexer::scan_token() {
@@ -181,12 +195,13 @@ void Lexer::scan_token() {
             add_token(TokenType::MinusOne);
         else if (match('='))
             add_token(TokenType::MinusEq);
-        add_token(TokenType::Minus);
+        else
+            add_token(TokenType::Minus);
         break;
 
     case '*':
         if (match('='))
-            add_token(TokenType::PowEq);
+            add_token(TokenType::MulEq);
         else
             add_token(TokenType::Star);
         break;

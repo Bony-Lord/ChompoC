@@ -74,7 +74,7 @@ namespace {
     }
     bool values_equal(const Value &left, const Value &right) {
         if (left.data.index() != right.data.index())
-            return true;
+            return false;
         if (left.is_null())
             return true;
 
@@ -194,7 +194,7 @@ Value Interpreter::evaluate_node(const AssignmentExpr &expression) {
                                    left_val.type_name() + " and " +
                                    right_val.type_name());
 
-    } else if (expression.op.type == TokenType::PowEq) {
+    } else if (expression.op.type == TokenType::MulEq) {
         if (left_val.is_integer() && right_val.is_integer())
             res = Value(std::get<std::int64_t>(left_val.data) *
                         std::get<std::int64_t>(right_val.data));
@@ -210,8 +210,7 @@ Value Interpreter::evaluate_node(const AssignmentExpr &expression) {
                 repeat += str;
             }
             res = Value(repeat);
-        }
-        else
+        } else
             throw RuntimeError(expression.op,
                                "operator '*=' cannot be applied to " +
                                    left_val.type_name() + " and " +
@@ -261,7 +260,7 @@ Value Interpreter::evaluate_node(const UnaryExpr &expression) {
 
     default:
         throw RuntimeError(expression.operation,
-                           "Interpretator: unknown unary operator '" +
+                           "Interpreter: unknown unary operator '" +
                                expression.operation.lexeme + "'");
     }
 }
@@ -307,7 +306,6 @@ Value Interpreter::evaluate_node(const BinaryExpr &expression) {
         if (!left.is_integer() || !right.is_integer()) {
             binary_type_error(expression.operation, left, right);
         }
-
 
         return Value(std::get<std::int64_t>(left.data) -
                      std::get<std::int64_t>(right.data));
@@ -404,10 +402,6 @@ void Interpreter::execute_node(const VarStmt &statement) {
     if (statement.is_array && !value.is_array()) {
         throw RuntimeError(statement.name,
                            "array variable requires an array initializer");
-    }
-    if (!statement.is_array && value.is_array()) {
-        throw RuntimeError(statement.name,
-                           "non-array variable cannot contain an array");
     }
 
     environment_->define(statement.name, std::move(value));

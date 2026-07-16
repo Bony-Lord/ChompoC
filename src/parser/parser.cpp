@@ -108,7 +108,7 @@ const Parser::ParseRule &Parser::get_rule(TokenType type) {
         result[token_index(TokenType::MinusEq)] = {nullptr, &Parser::assignment,
                                                    Precedence::Assignment};
 
-        result[token_index(TokenType::PowEq)] = {nullptr, &Parser::assignment,
+        result[token_index(TokenType::MulEq)] = {nullptr, &Parser::assignment,
                                                  Precedence::Assignment};
 
         result[token_index(TokenType::DivideEq)] = {
