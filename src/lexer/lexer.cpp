@@ -163,36 +163,21 @@ void Lexer::scan_token() {
         add_token(TokenType::Dot);
         break;
 
-    case '++':
-        add_token(TokenType::PlusOne);
-        break;
-    case '--':
-        add_token(TokenType::MinusOne);
-        break;
-
-    case '+=':
-        add_token(TokenType::PlusEq);
-        break;
-    case '-=':
-        add_token(TokenType::MinusEq);
-        break;
-    case '*=':
-        add_token(TokenType::PowEq);
-        break;
-    case '/=':
-        add_token(TokenType::DivideEq);
-        break;
-
     case '+':
-        add_token(TokenType::Plus);
+        if (match('+')) add_token(TokenType::PlusOne);
+        else if (match('=')) add_token(TokenType::PlusEq);
+        else add_token(TokenType::Plus);
         break;
 
     case '-':
+        if (match('-')) add_token(TokenType::MinusOne);
+        else if (match('=')) add_token(TokenType::MinusEq);
         add_token(TokenType::Minus);
         break;
 
     case '*':
-        add_token(TokenType::Star);
+        if (match('=')) add_token(TokenType::PowEq);
+        else add_token(TokenType::Star);
         break;
 
     case '/':
@@ -201,9 +186,10 @@ void Lexer::scan_token() {
                 advance();
             }
         }
-        else {
+        else if (match('='))
+            add_token(TokenType::DivideEq);
+        else
             add_token(TokenType::Slash);
-        }
         break;
 
     case '%':
