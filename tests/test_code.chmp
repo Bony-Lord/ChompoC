@@ -5,8 +5,8 @@ result = result + 10;
 result += 5;
 print("result: ", result, " numbers: ", numbers, "\n");
 //sum(numbers, result);
-var a = true;
-var b = false;
+var a = 1;
+var b = 0;
 
 print("a + b(true + false)=", a + b, "\n");
 {
