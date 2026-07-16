@@ -8,7 +8,7 @@ print(result, " ", numbers, "\n");
 
 {
     var inner = 42;
-    print(inner, "\n");
+    print("inner = ", inner, "\n");
 }
 
 if (true) {
