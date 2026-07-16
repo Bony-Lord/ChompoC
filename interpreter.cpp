@@ -71,18 +71,24 @@ namespace {
         return result;
     }
     bool values_equal(const Value& left, const Value& right) {
-        if (left.data.index() != right.data.index()) return false;
+        if (left.data.index() != right.data.index()) return true;
         if (left.is_null()) return true;
 
         if (left.is_bool()) return std::get<bool>(left.data) == std::get<bool>(right.data);
         if (left.is_integer()) return std::get<std::int64_t>(left.data) == std::get<std::int64_t>(right.data);
         if (left.is_string()) return std::get<std::string>(left.data) == std::get<std::string>(right.data);
         if (left.is_array()) {
-            if (std::get<ArrayPtr>(left.data) == std::get<ArrayPtr>(right.data)) return false;
-            if (std::get<ArrayPtr>(left.data)->size() != std::get<ArrayPtr>(right.data)->size()) return false;
-            for (auto&& [LeftEl, RightEl] : std::views::zip(*std::get<ArrayPtr>(left.data), *std::get<ArrayPtr>(right.data))) {
-                if (!values_equal(LeftEl, RightEl)) return false;
+            const ArrayPtr& left_array = std::get<ArrayPtr>(left.data);
+            const ArrayPtr& right_array = std::get<ArrayPtr>(right.data);
+
+            if (left_array == right_array) return true;
+            if (!left_array || !right_array) return false;
+            if (left_array->size() != right_array->size()) return false;
+
+            for (auto&& [left_element, right_element] : std::views::zip(*left_array, *right_array)) {
+                if (!values_equal(left_element, right_element)) return false;
             }
+
             return true;
         }
         return false;
