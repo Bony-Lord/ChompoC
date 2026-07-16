@@ -21,16 +21,14 @@ namespace {
         const auto [position, error] = std::from_chars(begin, end, value);
 
         if (error != std::errc{} || position != end) {
-            throw RuntimeError(token, "invalid integer literal '" +
-                                          token.lexeme + "'");
+            throw RuntimeError(token, "invalid integer literal '" + token.lexeme + "'");
         }
 
         return value;
     }
 
     std::string parse_string(const Token &token) {
-        if (token.lexeme.size() < 2 || token.lexeme.front() != '"' ||
-            token.lexeme.back() != '"') {
+        if (token.lexeme.size() < 2 || token.lexeme.front() != '"' || token.lexeme.back() != '"') {
             throw RuntimeError(token, "invalid string literal");
         }
 
@@ -72,6 +70,28 @@ namespace {
 
         return result;
     }
+    double parse_double(const Token &token) {
+        double value = 0.0;
+
+        const char *begin = token.lexeme.data();
+        const char *end = begin + token.lexeme.size();
+
+        const auto [position, error] = std::from_chars(begin, end, value, std::chars_format::general);
+
+        if (error != std::errc{} || position != end) {
+            throw RuntimeError(token, "invalid double literal '" + token.lexeme + "'");
+        }
+
+        return value;
+    }
+
+    Value parse_number(const Token &token) {
+        if (token.lexeme.find('.') != std::string::npos)
+            return Value(parse_double(token));
+
+        return Value(parse_integer(token));
+    }
+
     bool values_equal(const Value &left, const Value &right) {
         if (left.is_number() && right.is_number()) {
             if (left.is_double() || right.is_double()) {
@@ -90,11 +110,9 @@ namespace {
         if (left.is_bool())
             return std::get<bool>(left.data) == std::get<bool>(right.data);
         if (left.is_integer())
-            return std::get<std::int64_t>(left.data) ==
-                   std::get<std::int64_t>(right.data);
+            return std::get<std::int64_t>(left.data) == std::get<std::int64_t>(right.data);
         if (left.is_string())
-            return std::get<std::string>(left.data) ==
-                   std::get<std::string>(right.data);
+            return std::get<std::string>(left.data) == std::get<std::string>(right.data);
         if (left.is_array()) {
             const ArrayPtr &left_array = std::get<ArrayPtr>(left.data);
             const ArrayPtr &right_array = std::get<ArrayPtr>(right.data);
@@ -106,8 +124,7 @@ namespace {
             if (left_array->size() != right_array->size())
                 return false;
 
-            for (auto &&[left_element, right_element] :
-                 std::views::zip(*left_array, *right_array)) {
+            for (auto &&[left_element, right_element] : std::views::zip(*left_array, *right_array)) {
                 if (!values_equal(left_element, right_element))
                     return false;
             }
@@ -117,23 +134,167 @@ namespace {
         return false;
     }
 
-    bool can_convert_to_string_implicitly(const Value &value) {
-        return value.is_null() || value.is_number() ||
-               value.is_string();
+    Value repeat_string(const Token &operation, const std::string &string, std::int64_t count) {
+        if (count < 0) {
+            throw RuntimeError(operation, "string multiplication count cannot be negative");
+        }
+
+        std::string result;
+
+        for (std::int64_t index = 0; index < count; ++index)
+            result += string;
+
+        return Value(std::move(result));
     }
 
-    [[noreturn]] void binary_type_error(const Token &operation,
-                                        const Value &left, const Value &right) {
-        throw RuntimeError(operation, "operator '" + operation.lexeme +
-                                          "' cannot be applied to " +
-                                          left.type_name() + " and " +
-                                          right.type_name());
+    bool can_convert_to_string_implicitly(const Value &value) {
+        return value.is_null() || value.is_number() || value.is_string();
+    }
+
+    TokenType binary_operator_type(TokenType type) {
+        switch (type) {
+        case TokenType::PlusEq:
+            return TokenType::Plus;
+
+        case TokenType::MinusEq:
+            return TokenType::Minus;
+
+        case TokenType::MulEq:
+            return TokenType::Star;
+
+        case TokenType::DivideEq:
+            return TokenType::Slash;
+
+        default:
+            return type;
+        }
+    }
+
+    [[noreturn]] void binary_type_error(const Token &operation, const Value &left, const Value &right) {
+        throw RuntimeError(operation, "operator '" + operation.lexeme + "' cannot be applied to " + left.type_name() +
+                                          " and " + right.type_name());
+    }
+
+    Value apply_binary(const Token &operation, const Value &left, const Value &right) {
+        const TokenType type = binary_operator_type(operation.type);
+
+        if (type == TokenType::EqualEqual)
+            return Value(values_equal(left, right));
+
+        if (type == TokenType::NotEqual)
+            return Value(!values_equal(left, right));
+
+        if (type == TokenType::Plus && (left.is_string() || right.is_string())) {
+            if (!can_convert_to_string_implicitly(left) || !can_convert_to_string_implicitly(right)) {
+                binary_type_error(operation, left, right);
+            }
+
+            return Value(left.to_string() + right.to_string());
+        }
+
+        if (type == TokenType::Star) {
+            if (left.is_string() && right.is_integer_number()) {
+                return repeat_string(operation, std::get<std::string>(left.data), right.number_as_integer());
+            }
+
+            if (right.is_string() && left.is_integer_number()) {
+                return repeat_string(operation, std::get<std::string>(right.data), left.number_as_integer());
+            }
+        }
+
+        if (!left.is_number() || !right.is_number())
+            binary_type_error(operation, left, right);
+
+        const bool use_double = left.is_double() || right.is_double();
+
+        switch (type) {
+        case TokenType::Plus:
+            if (use_double) {
+                return Value(left.number_as_double() + right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() + right.number_as_integer());
+
+        case TokenType::Minus:
+            if (use_double) {
+                return Value(left.number_as_double() - right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() - right.number_as_integer());
+
+        case TokenType::Star:
+            if (use_double) {
+                return Value(left.number_as_double() * right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() * right.number_as_integer());
+
+        case TokenType::Slash:
+            if (use_double) {
+                const double denominator = right.number_as_double();
+
+                if (denominator == 0.0)
+                    throw RuntimeError(operation, "division by zero");
+
+                return Value(left.number_as_double() / denominator);
+            } else {
+                const std::int64_t denominator = right.number_as_integer();
+
+                if (denominator == 0)
+                    throw RuntimeError(operation, "division by zero");
+
+                return Value(left.number_as_integer() / denominator);
+            }
+
+        case TokenType::Percent: {
+            if (!left.is_integer_number() || !right.is_integer_number()) {
+                binary_type_error(operation, left, right);
+            }
+
+            const std::int64_t denominator = right.number_as_integer();
+
+            if (denominator == 0)
+                throw RuntimeError(operation, "division by zero");
+
+            return Value(left.number_as_integer() % denominator);
+        }
+
+        case TokenType::Less:
+            if (use_double) {
+                return Value(left.number_as_double() < right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() < right.number_as_integer());
+
+        case TokenType::LessEqual:
+            if (use_double) {
+                return Value(left.number_as_double() <= right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() <= right.number_as_integer());
+
+        case TokenType::Greater:
+            if (use_double) {
+                return Value(left.number_as_double() > right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() > right.number_as_integer());
+
+        case TokenType::GreaterEqual:
+            if (use_double) {
+                return Value(left.number_as_double() >= right.number_as_double());
+            }
+
+            return Value(left.number_as_integer() >= right.number_as_integer());
+
+        default:
+            throw RuntimeError(operation, "unknown binary operator '" + operation.lexeme + "'");
+        }
     }
 } // namespace
 
 Interpreter::Interpreter(std::ostream &output)
-    : globals_(std::make_shared<Environment>()), environment_(globals_),
-      output_(output) {}
+    : globals_(std::make_shared<Environment>()), environment_(globals_), output_(output) {}
 
 void Interpreter::interpret(const Program &program) {
     for (const StmtPtr &statement : program) {
@@ -142,20 +303,18 @@ void Interpreter::interpret(const Program &program) {
 }
 
 Value Interpreter::evaluate(const Expr &expression) {
-    return std::visit([this](const auto &node) { return evaluate_node(node); },
-                      expression.node);
+    return std::visit([this](const auto &node) { return evaluate_node(node); }, expression.node);
 }
 
 void Interpreter::execute(const Stmt &statement) {
-    std::visit([this](const auto &node) { execute_node(node); },
-               statement.node);
+    std::visit([this](const auto &node) { execute_node(node); }, statement.node);
 }
 
 Value Interpreter::evaluate_node(const LiteralExpr &expression) {
     const Token &token = expression.value;
     switch (token.type) {
     case TokenType::Number:
-        return Value(parse_integer(token));
+        return Value(parse_number(token));
     case TokenType::String:
         return Value(parse_string(token));
     case TokenType::True:
@@ -169,85 +328,23 @@ Value Interpreter::evaluate_node(const LiteralExpr &expression) {
     }
 }
 
-Value Interpreter::evaluate_node(const VariableExpr &expression) {
-    return environment_->get(expression.name);
-}
+Value Interpreter::evaluate_node(const VariableExpr &expression) { return environment_->get(expression.name); }
 
-Value Interpreter::evaluate_node(const GroupingExpr &expression) {
-    return evaluate(*expression.expression);
-}
+Value Interpreter::evaluate_node(const GroupingExpr &expression) { return evaluate(*expression.expression); }
 
 Value Interpreter::evaluate_node(const AssignmentExpr &expression) {
-    Value right_val = evaluate(*expression.value);
+    const Value right = evaluate(*expression.value);
+
     if (expression.op.type == TokenType::Equal) {
-        environment_->assign(expression.name, right_val);
-        return right_val;
+        environment_->assign(expression.name, right);
+        return right;
     }
-    Value left_val = environment_->get(expression.name);
-    Value res;
-    if (expression.op.type == TokenType::PlusEq) {
-        if (left_val.is_integer() && right_val.is_integer())
-            res = Value(std::get<std::int64_t>(left_val.data) +
-                        std::get<std::int64_t>(right_val.data));
-        else if (left_val.is_string() && right_val.is_string())
-            res = Value(std::get<std::string>(left_val.data) +
-                        std::get<std::string>(right_val.data));
-        else
-            throw RuntimeError(expression.op,
-                               "operator '+=' cannot be applied to " +
-                                   left_val.type_name() + " and " +
-                                   right_val.type_name());
 
-    } else if (expression.op.type == TokenType::MinusEq) {
-        if (left_val.is_integer() && right_val.is_integer())
-            res = Value(std::get<std::int64_t>(left_val.data) -
-                        std::get<std::int64_t>(right_val.data));
-        else
-            throw RuntimeError(expression.op,
-                               "operator '-=' cannot be applied to " +
-                                   left_val.type_name() + " and " +
-                                   right_val.type_name());
+    const Value left = environment_->get(expression.name);
+    const Value result = apply_binary(expression.op, left, right);
 
-    } else if (expression.op.type == TokenType::MulEq) {
-        if (left_val.is_integer() && right_val.is_integer())
-            res = Value(std::get<std::int64_t>(left_val.data) *
-                        std::get<std::int64_t>(right_val.data));
-        else if (left_val.is_string() && right_val.is_integer()) {
-            std::string str = std::get<std::string>(left_val.data);
-            std::int64_t cnt = std::get<std::int64_t>(right_val.data);
-            if (cnt < 0)
-                throw RuntimeError(
-                    expression.op,
-                    "String multiplication count cannot be negative");
-            std::string repeat = "";
-            for (std::int64_t i = 0; i < cnt; ++i) {
-                repeat += str;
-            }
-            res = Value(repeat);
-        } else
-            throw RuntimeError(expression.op,
-                               "operator '*=' cannot be applied to " +
-                                   left_val.type_name() + " and " +
-                                   right_val.type_name());
-
-    } else if (expression.op.type == TokenType::DivideEq) {
-        if (left_val.is_integer() && right_val.is_integer()) {
-            std::int64_t denom = std::get<std::int64_t>(right_val.data);
-            if (denom == 0)
-                throw RuntimeError(expression.op, "division by zero");
-            res = Value(std::get<std::int64_t>(left_val.data) / denom);
-        } else
-            throw RuntimeError(expression.op,
-                               "operator '/=' cannot be applied to " +
-                                   left_val.type_name() + " and " +
-                                   right_val.type_name());
-    } else {
-        throw RuntimeError(expression.op, "unknown assignment operator '" +
-                                              expression.op.lexeme + "'");
-    }
-    environment_->assign(expression.name, res);
-
-    return res;
+    environment_->assign(expression.name, result);
+    return result;
 }
 
 Value Interpreter::evaluate_node(const ArrayExpr &expression) {
@@ -264,21 +361,24 @@ Value Interpreter::evaluate_node(const UnaryExpr &expression) {
 
     switch (expression.operation.type) {
     case TokenType::Minus:
-        if (!right.is_integer()) {
+        if (!right.is_number()) {
             throw RuntimeError(
                 expression.operation,
-                "operator '-' requires an integer operand, got " +
+                "operator '-' requires a numeric operand, got " +
                     right.type_name());
         }
-        return Value(-std::get<std::int64_t>(right.data));
+
+        if (right.is_double())
+            return Value(-right.number_as_double());
+
+        return Value(-right.number_as_integer());
 
     case TokenType::Not:
         return Value(!right.is_truthy());
 
     default:
         throw RuntimeError(expression.operation,
-                           "Interpreter: unknown unary operator '" +
-                               expression.operation.lexeme + "'");
+                           "Interpreter: unknown unary operator '" + expression.operation.lexeme + "'");
     }
 }
 
@@ -288,137 +388,35 @@ Value Interpreter::evaluate_node(const BinaryExpr &expression) {
     if (expression.operation.type == TokenType::AndAnd) {
         if (!left.is_truthy())
             return Value(false);
+
         return Value(evaluate(*expression.right).is_truthy());
     }
 
     if (expression.operation.type == TokenType::OrOr) {
         if (left.is_truthy())
             return Value(true);
+
         return Value(evaluate(*expression.right).is_truthy());
     }
 
     const Value right = evaluate(*expression.right);
 
-    switch (expression.operation.type) {
-    case TokenType::EqualEqual:
-        return Value(values_equal(left, right));
-
-    case TokenType::NotEqual:
-        return Value(!values_equal(left, right));
-
-    case TokenType::Plus:
-        if (left.is_integer() && right.is_integer()) {
-            return Value(std::get<std::int64_t>(left.data) +
-                         std::get<std::int64_t>(right.data));
-        }
-
-        if (left.is_string() && right.is_string()) {
-            return Value(std::get<std::string>(left.data) +
-                         std::get<std::string>(right.data));
-        }
-
-        binary_type_error(expression.operation, left, right);
-
-    case TokenType::Minus:
-        if (!left.is_integer() || !right.is_integer()) {
-            binary_type_error(expression.operation, left, right);
-        }
-
-        return Value(std::get<std::int64_t>(left.data) -
-                     std::get<std::int64_t>(right.data));
-
-    case TokenType::Star:
-        if (!left.is_integer() || !right.is_integer()) {
-            binary_type_error(expression.operation, left, right);
-        }
-
-        return Value(std::get<std::int64_t>(left.data) *
-                     std::get<std::int64_t>(right.data));
-
-    case TokenType::Slash: {
-        if (!left.is_integer() || !right.is_integer()) {
-            binary_type_error(expression.operation, left, right);
-        }
-
-        const std::int64_t left_integer = std::get<std::int64_t>(left.data);
-        const std::int64_t right_integer = std::get<std::int64_t>(right.data);
-
-        if (right_integer == 0) {
-            throw RuntimeError(expression.operation, "division by zero");
-        }
-
-        return Value(left_integer / right_integer);
-    }
-
-    case TokenType::Percent: {
-        if (!left.is_integer() || !right.is_integer()) {
-            binary_type_error(expression.operation, left, right);
-        }
-
-        const std::int64_t left_integer = std::get<std::int64_t>(left.data);
-        const std::int64_t right_integer = std::get<std::int64_t>(right.data);
-
-        if (right_integer == 0) {
-            throw RuntimeError(expression.operation, "division by zero");
-        }
-
-        return Value(left_integer % right_integer);
-    }
-
-    case TokenType::Less:
-    case TokenType::LessEqual:
-    case TokenType::Greater:
-    case TokenType::GreaterEqual: {
-        if (!left.is_integer() || !right.is_integer()) {
-            binary_type_error(expression.operation, left, right);
-        }
-
-        const std::int64_t left_integer = std::get<std::int64_t>(left.data);
-        const std::int64_t right_integer = std::get<std::int64_t>(right.data);
-
-        switch (expression.operation.type) {
-        case TokenType::Less:
-            return Value(left_integer < right_integer);
-        case TokenType::LessEqual:
-            return Value(left_integer <= right_integer);
-        case TokenType::Greater:
-            return Value(left_integer > right_integer);
-        case TokenType::GreaterEqual:
-            return Value(left_integer >= right_integer);
-        default:
-            break;
-        }
-
-        break;
-    }
-
-    default:
-        throw RuntimeError(expression.operation,
-                           "unknown binary operator '" +
-                               expression.operation.lexeme + "'");
-    }
-
-    throw RuntimeError(expression.operation, "invalid binary operation");
+    return apply_binary(expression.operation, left, right);
 }
 
 Value Interpreter::evaluate_node(const CallExpr &expression) {
-    throw RuntimeError(expression.closing_parenthesis,
-                       "Interpreter: functions are not supported yet");
+    throw RuntimeError(expression.closing_parenthesis, "Interpreter: functions are not supported yet");
 }
 
-void Interpreter::execute_node(const ExpressionStmt &statement) {
-    evaluate(*statement.expression);
-}
+void Interpreter::execute_node(const ExpressionStmt &statement) { evaluate(*statement.expression); }
 
 void Interpreter::execute_node(const VarStmt &statement) {
-    Value value = statement.is_array ? Value(std::make_shared<ArrayValue>())
-                                     : Value(nullptr);
+    Value value = statement.is_array ? Value(std::make_shared<ArrayValue>()) : Value(nullptr);
 
     if (statement.initializer)
         value = evaluate(*statement.initializer);
     if (statement.is_array && !value.is_array()) {
-        throw RuntimeError(statement.name,
-                           "array variable requires an array initializer");
+        throw RuntimeError(statement.name, "array variable requires an array initializer");
     }
 
     environment_->define(statement.name, std::move(value));
@@ -431,12 +429,10 @@ void Interpreter::execute_node(const PrintStmt &statement) {
 }
 
 void Interpreter::execute_node(const BlockStmt &statement) {
-    execute_block(statement.statements,
-                  std::make_shared<Environment>(environment_));
+    execute_block(statement.statements, std::make_shared<Environment>(environment_));
 }
 
-void Interpreter::execute_block(const std::vector<StmtPtr> &statements,
-                                std::shared_ptr<Environment> environment) {
+void Interpreter::execute_block(const std::vector<StmtPtr> &statements, std::shared_ptr<Environment> environment) {
     const std::shared_ptr<Environment> previous = environment_;
     environment_ = std::move(environment);
 

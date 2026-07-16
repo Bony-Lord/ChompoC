@@ -30,7 +30,5 @@ private:
     std::string print_node(const BlockStmt &statement) const;
     std::string print_node(const IfStmt &statement) const;
 
-    std::string
-    parenthesize(std::string_view name,
-                 std::initializer_list<const Expr *> expressions) const;
+    std::string parenthesize(std::string_view name, std::initializer_list<const Expr *> expressions) const;
 };

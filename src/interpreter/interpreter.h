@@ -23,8 +23,7 @@ private:
     Value evaluate(const Expr &expression);
     void execute(const Stmt &statement);
 
-    void execute_block(const std::vector<StmtPtr> &statements,
-                       std::shared_ptr<Environment> environment);
+    void execute_block(const std::vector<StmtPtr> &statements, std::shared_ptr<Environment> environment);
 
     // Выражения.
     Value evaluate_node(const LiteralExpr &expression);

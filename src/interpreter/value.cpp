@@ -1,10 +1,9 @@
 #include "value.h"
 
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
-#include <iomanip>
-
 
 Value::Value() : data(std::monostate{}) {}
 Value::Value(std::nullptr_t) : data(std::monostate{}) {}
@@ -12,7 +11,7 @@ Value::Value(ArrayPtr value) : data(std::move(value)) {}
 Value::Value(bool value) : data(value) {}
 Value::Value(std::int64_t value) : data(value) {}
 Value::Value(std::string value) : data(std::move(value)) {}
-Value::Value(const char *value) : data(std::move(std::string(value))) {}
+Value::Value(const char *value) : data(std::string(value)) {}
 Value::Value(double value) : data(value) {}
 
 bool Value::is_null() const {
@@ -40,7 +39,7 @@ bool Value::is_truthy() const {
     if (const auto *string = std::get_if<std::string>(&data))
         return !string->empty();
     if (const auto *array = std::get_if<ArrayPtr>(&data))
-        return !(*array)->empty();
+        return *array && !(*array)->empty();
 
     return true;
 }
@@ -117,7 +116,7 @@ std::string Value::to_string() const {
     }
     if (const auto *doubler = std::get_if<double>(&data)) {
         std::ostringstream output;
-        output << std::setprecision(15) << std::fixed << *doubler;
+        output << std::setprecision(15) << *doubler;
         return output.str();
     }
 

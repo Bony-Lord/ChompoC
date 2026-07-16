@@ -12,9 +12,7 @@ using ArrayValue = std::vector<Value>;
 using ArrayPtr = std::shared_ptr<ArrayValue>;
 
 struct Value {
-    using Storage =
-        std::variant<std::monostate, // NULL
-                     bool, std::int64_t, std::string, ArrayPtr, double>;
+    using Storage = std::variant<std::monostate /*NULL*/, bool, std::int64_t, std::string, ArrayPtr, double>;
 
     Storage data;
 

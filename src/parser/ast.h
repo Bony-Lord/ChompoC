@@ -33,7 +33,6 @@ struct GroupingExpr {
     ExprPtr expression;
 };
 
-
 struct AssignmentExpr {
     Token name;
     Token op;
@@ -51,12 +50,12 @@ struct ArrayExpr {
 };
 
 struct Expr {
-    using Node = std::variant<LiteralExpr, UnaryExpr, BinaryExpr, GroupingExpr, VariableExpr, AssignmentExpr, CallExpr, ArrayExpr>;
+    using Node = std::variant<LiteralExpr, UnaryExpr, BinaryExpr, GroupingExpr, VariableExpr, AssignmentExpr, CallExpr,
+                              ArrayExpr>;
 
     Node node;
 
-    template <class T>
-    explicit Expr(T value) : node(std::move(value)) {}
+    template <class T> explicit Expr(T value) : node(std::move(value)) {}
 };
 
 struct Stmt;
@@ -93,8 +92,5 @@ struct Stmt {
 
     Node node;
 
-    template<class T>
-    explicit Stmt(T value)
-        : node(std::move(value)) {
-    }
+    template <class T> explicit Stmt(T value) : node(std::move(value)) {}
 };
