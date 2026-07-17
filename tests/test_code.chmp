@@ -139,3 +139,11 @@ var x = 5;
 
     ;;;
 }
+
+fun func(start) {
+    if (start == 0) return Array{0};
+    print(start, '\n');
+    return Array{start} + func(start - 1);
+}
+
+print(func(10));
