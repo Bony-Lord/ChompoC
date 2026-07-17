@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -581,6 +582,37 @@ namespace {
 
         return static_cast<std::size_t>(index);
     }
+
+    bool contains_array_impl(const Value &value, const ArrayValue *target,
+                             std::unordered_set<const ArrayValue *> &visited) {
+        if (!value.is_array())
+            return false;
+
+        const ArrayPtr &array = std::get<ArrayPtr>(value.data);
+
+        if (!array)
+            return false;
+
+        if (array.get() == target)
+            return true;
+
+        if (!visited.insert(array.get()).second)
+            return false;
+
+        for (const Value &element : *array) {
+            if (contains_array_impl(element, target, visited)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool contains_array(const Value &value, const ArrayValue *target) {
+        std::unordered_set<const ArrayValue *> visited;
+
+        return contains_array_impl(value, target, visited);
+    }
 } // namespace
 
 Interpreter::Interpreter(std::ostream &output, std::ostream &diagnostics)
@@ -915,8 +947,15 @@ Interpreter::ResolvedTarget Interpreter::resolve_target(const Expr &expression) 
 
         const std::size_t position = checked_index(index->bracket, index_value, size);
 
-        return ResolvedTarget{(*array)[position],
-                              [array, position](Value value) { (*array)[position] = std::move(value); }};
+        const Token bracket = index->bracket;
+
+        return ResolvedTarget{(*array)[position], [array, position, bracket](Value value) {
+                                  if (contains_array(value, array.get())) {
+                                      throw RuntimeError(bracket, "cyclic array references are not allowed");
+                                  }
+
+                                  (*array)[position] = std::move(value);
+                              }};
     }
 
     if (object.value.is_string()) {

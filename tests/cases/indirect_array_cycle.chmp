@@ -1,0 +1,4 @@
+var first = Array{NULL};
+var second = Array{first};
+
+first[0] = second;

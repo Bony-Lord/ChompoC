@@ -146,4 +146,14 @@ fun func(start) {
     return Array{start} + func(start - 1);
 }
 
-print(func(10));
+print(func(10), '\n');
+
+var child = Array{1};
+
+var first = Array{child};
+var second = Array{child};
+
+second[0][0] = 10;
+
+print(first, "\n");
+print(second, "\n");

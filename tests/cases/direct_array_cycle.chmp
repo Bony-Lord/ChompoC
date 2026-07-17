@@ -1,0 +1,2 @@
+var array = Array{NULL};
+array[0] = array;
