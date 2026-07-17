@@ -6,20 +6,11 @@
 
 namespace {
     const std::unordered_map<std::string, TokenType> keywords{
-        {"var", TokenType::Var},
-        {"print", TokenType::Print},
-        {"if", TokenType::If},
-        {"else", TokenType::Else},
-        {"while", TokenType::While},
-        {"for", TokenType::For},
-        {"return", TokenType::Return},
-        {"break", TokenType::Break},
-        {"continue", TokenType::Continue},
-        {"fun", TokenType::Fun},
-        {"true", TokenType::True},
-        {"false", TokenType::False},
-        {"NULL", TokenType::Null},
-        {"in", TokenType::In},
+        {"var", TokenType::Var},       {"print", TokenType::Print}, {"if", TokenType::If},
+        {"else", TokenType::Else},     {"while", TokenType::While}, {"for", TokenType::For},
+        {"return", TokenType::Return}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
+        {"fun", TokenType::Fun},       {"true", TokenType::True},   {"false", TokenType::False},
+        {"NULL", TokenType::Null},     {"in", TokenType::In},
     };
 }
 
@@ -52,8 +43,7 @@ char Lexer::advance() { // if !is_at_end()
 }
 
 void Lexer::add_token(TokenType type) {
-    tokens_.push_back(Token{type, source_.substr(start_, current_ - start_),
-                            start_position_});
+    tokens_.push_back(Token{type, source_.substr(start_, current_ - start_), start_position_});
 }
 
 std::vector<Token> Lexer::scan_tokens() {
@@ -81,9 +71,7 @@ bool Lexer::is_support_name(std::string_view s) {
     return true;
 }
 bool Lexer::is_digit(char c) { return c >= '0' && c <= '9'; }
-bool Lexer::is_alpha(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
-}
+bool Lexer::is_alpha(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_'); }
 bool Lexer::is_alpha_numeric(char c) { return is_alpha(c) || is_digit(c); }
 bool Lexer::match(char c) {
     if (peek() != c)
@@ -93,9 +81,16 @@ bool Lexer::match(char c) {
 }
 
 void Lexer::number() {
-    while (is_digit(peek())) {
+    while (is_digit(peek()))
         advance();
+
+    if (peek() == '.' && is_digit(peek_next())) {
+        advance();
+
+        while (is_digit(peek()))
+            advance();
     }
+
     add_token(TokenType::Number);
 }
 
@@ -288,7 +283,6 @@ void Lexer::scan_token() {
 }
 
 [[noreturn]] void Lexer::error(std::string_view message) const {
-    throw std::runtime_error(
-        "Lexer error: in " + std::to_string(start_position_.line) + ":" +
-        std::to_string(start_position_.column) + ": \n" + std::string(message));
+    throw std::runtime_error("Lexer error: in " + std::to_string(start_position_.line) + ":" +
+                             std::to_string(start_position_.column) + ": \n" + std::string(message));
 }

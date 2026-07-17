@@ -11,9 +11,11 @@ struct Value;
 using ArrayValue = std::vector<Value>;
 using ArrayPtr = std::shared_ptr<ArrayValue>;
 
+class Callable;
+using CallablePtr = std::shared_ptr<Callable>;
+
 struct Value {
-    using Storage = std::variant<std::monostate, // NULL
-                                 bool, std::int64_t, std::string, ArrayPtr, double>;
+    using Storage = std::variant<std::monostate /*NULL*/, bool, std::int64_t, std::string, ArrayPtr, double, CallablePtr>;
 
     Storage data;
 
@@ -25,13 +27,20 @@ struct Value {
     Value(const char *value);
     Value(ArrayPtr value);
     Value(double value);
+    Value(CallablePtr value);
 
     bool is_null() const;
     bool is_bool() const;
     bool is_integer() const;
+    bool is_double() const;
+    bool is_number() const;
+    bool is_integer_number() const;
     bool is_string() const;
     bool is_array() const;
-    bool is_double() const;
+    bool is_callable() const;
+
+    std::int64_t number_as_integer() const;
+    double number_as_double() const;
 
     bool is_truthy() const;
 

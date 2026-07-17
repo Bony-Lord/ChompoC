@@ -2,21 +2,27 @@
 #include "runtime_error.h"
 
 #include <utility>
+#include <stdexcept>
 
-Environment::Environment(std::shared_ptr<Environment> parent)
-    : parent_(std::move(parent)) {}
+Environment::Environment(std::shared_ptr<Environment> parent) : parent_(std::move(parent)) {}
 
 void Environment::define(const Token &name, Value value) {
     if (values_.contains(name.lexeme)) {
-        throw RuntimeError(name, "variable '" + name.lexeme +
-                                     "' is already declared in this scope");
+        throw RuntimeError(name, "variable '" + name.lexeme + "' is already declared in this scope");
     }
     values_.emplace(name.lexeme, std::move(value));
 }
+void Environment::define(std::string name, Value value) {
+    if (values_.contains(name)) {
+        throw std::logic_error(
+            "global value '" + name + "' is already defined");
+    }
+
+    values_.emplace(std::move(name), std::move(value));
+}
 
 Value Environment::get(const Token &name) const {
-    if (const auto iterator = values_.find(name.lexeme);
-        iterator != values_.end())
+    if (const auto iterator = values_.find(name.lexeme); iterator != values_.end())
         return iterator->second;
     if (parent_)
         return parent_->get(name);
@@ -24,8 +30,7 @@ Value Environment::get(const Token &name) const {
 }
 
 void Environment::assign(const Token &name, Value value) {
-    if (const auto iterator = values_.find(name.lexeme);
-        iterator != values_.end()) {
+    if (const auto iterator = values_.find(name.lexeme); iterator != values_.end()) {
         iterator->second = std::move(value);
         return;
     }

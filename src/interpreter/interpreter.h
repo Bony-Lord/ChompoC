@@ -8,7 +8,10 @@
 #include <memory>
 #include <vector>
 
+class UserFunction;
+
 class Interpreter {
+    friend class UserFunction;
 public:
     explicit Interpreter(std::ostream &output);
 
@@ -23,10 +26,9 @@ private:
     Value evaluate(const Expr &expression);
     void execute(const Stmt &statement);
 
-    void execute_block(const std::vector<StmtPtr> &statements,
-                       std::shared_ptr<Environment> environment);
+    void execute_block(const std::vector<StmtPtr> &statements, std::shared_ptr<Environment> environment);
 
-    // Выражения.
+    // Выражения
     Value evaluate_node(const LiteralExpr &expression);
     Value evaluate_node(const VariableExpr &expression);
     Value evaluate_node(const UnaryExpr &expression);
@@ -36,10 +38,12 @@ private:
     Value evaluate_node(const CallExpr &expression);
     Value evaluate_node(const ArrayExpr &expression);
 
-    // Инструкции.
+    // Инструкции
     void execute_node(const ExpressionStmt &statement);
     void execute_node(const VarStmt &statement);
     void execute_node(const PrintStmt &statement);
     void execute_node(const BlockStmt &statement);
     void execute_node(const IfStmt &statement);
+    void execute_node(const FunctionStmt &statement);
+    void execute_node(const ReturnStmt &statement);
 };
