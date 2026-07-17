@@ -15,15 +15,17 @@ class Interpreter {
     friend class UserFunction;
 
 public:
-    explicit Interpreter(std::ostream &output);
+    Interpreter(std::ostream &output, std::ostream &diagnostics = std::cerr);
 
     void interpret(const Program &program);
 
 private:
     std::shared_ptr<Environment> globals_;
     std::shared_ptr<Environment> environment_;
+    std::size_t call_depth_ = 0;
 
     std::ostream &output_;
+    std::ostream &diagnostics_;
 
     Value evaluate(const Expr &expression);
     void execute(const Stmt &statement);
@@ -56,4 +58,18 @@ private:
     void execute_node(const IfStmt &statement);
     void execute_node(const FunctionStmt &statement);
     void execute_node(const ReturnStmt &statement);
+
+    class CallDepthGuard {
+    public:
+        explicit CallDepthGuard(std::size_t &depth) : depth_(depth) { ++depth_; }
+
+        ~CallDepthGuard() { --depth_; }
+
+        CallDepthGuard(const CallDepthGuard &) = delete;
+        CallDepthGuard &operator=(const CallDepthGuard &) = delete;
+
+    private:
+        std::size_t &depth_;
+    };
+    void warning(const Token &token, const std::string &message);
 };

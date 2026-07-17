@@ -1,5 +1,6 @@
 #include "interpreter.h"
 #include "callable.h"
+#include "config.h"
 #include "return_signal.h"
 #include "runtime_error.h"
 
@@ -508,7 +509,6 @@ namespace {
             return Value(std::move(result));
         }
 
-
         return Value(std::make_shared<ArrayValue>(std::vector<Value>{std::move(value)}));
     }
     Value convert_char_array_to_string(const Token &token, const Value &value) {
@@ -578,8 +578,8 @@ namespace {
     }
 } // namespace
 
-Interpreter::Interpreter(std::ostream &output)
-    : globals_(std::make_shared<Environment>()), environment_(globals_), output_(output) {
+Interpreter::Interpreter(std::ostream &output, std::ostream &diagnostics)
+    : globals_(std::make_shared<Environment>()), environment_(globals_), output_(output), diagnostics_(diagnostics) {
     globals_->define("Int", Value(make_native("Int", [](const Token &token, const std::vector<Value> &arguments) {
                          return convert_to_int(token, arguments[0]);
                      })));
@@ -755,7 +755,15 @@ Value Interpreter::evaluate_node(const CallExpr &expression) {
                                                                std::to_string(callable->arity()) +
                                                                " argument(s), got " + std::to_string(arguments.size()));
     }
+    if (call_depth_ >= ChompoConfig::MaxCallDepth) {
+        throw RuntimeError(expression.closing_parenthesis, "Runtime StackOverflow: maximum call depth of " +
+                                                               std::to_string(ChompoConfig::MaxCallDepth) +
+                                                               " exceeded");
+    }
 
+    CallDepthGuard depth_guard(call_depth_);
+
+    return callable->call(*this, expression.closing_parenthesis, arguments);
     return callable->call(*this, expression.closing_parenthesis, arguments);
 }
 Value Interpreter::evaluate_node(const IndexExpr &expression) {
@@ -920,4 +928,11 @@ Interpreter::ResolvedTarget Interpreter::resolve_target(const Expr &expression) 
     }
 
     throw RuntimeError(index->bracket, "operator '[]' cannot be applied to " + object.value.type_name());
+}
+
+void Interpreter::warning(const Token &token, const std::string &message) {
+    if constexpr (ChompoConfig::EnableRuntimeWarnings) {
+        diagnostics_ << "Runtime warning at " << token.position.line << ":" << token.position.column << ": " << message
+                     << '\n';
+    }
 }

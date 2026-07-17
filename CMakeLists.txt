@@ -30,6 +30,7 @@ add_executable(Chompo
         src/interpreter/callable.h
         src/interpreter/callable.cpp
         src/interpreter/return_signal.h
+        src/config.h
 )
 
 target_include_directories(Chompo PRIVATE src)

@@ -147,3 +147,9 @@ fun func(start) {
 }
 
 print(func(10));
+
+fun overflow() {
+    return overflow();
+}
+
+overflow();

@@ -5,9 +5,9 @@
 
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 class Interpreter;
 class Environment;
@@ -20,22 +20,28 @@ public:
     virtual std::size_t arity() const = 0;
     virtual Value call(Interpreter &interpreter, const Token &token, const std::vector<Value> &arguments) const = 0;
     virtual std::string name() const = 0;
+    virtual bool accepts_arity(std::size_t count) const = 0;
+    virtual std::string arity_description() const = 0;
 };
 
 class NativeFunction final : public Callable {
 public:
-    using Function = std::function<Value(const Token &, const std::vector<Value> &)>;
+    using Function = std::function<Value(Interpreter &, const Token &, const std::vector<Value> &)>;
 
-    NativeFunction(std::string name, std::size_t arity, Function function);
+    NativeFunction(std::string name, std::size_t min_arity, std::size_t max_arity, Function function);
 
     std::size_t arity() const override;
     Value call(Interpreter &interpreter, const Token &token, const std::vector<Value> &arguments) const override;
     std::string name() const override;
 
+    bool accepts_arity(std::size_t count) const override;
+
 private:
     std::string name_;
     std::size_t arity_;
     Function function_;
+    std::size_t min_arity_;
+    std::size_t max_arity_;
 };
 
 class UserFunction final : public Callable {

@@ -6,13 +6,13 @@
 
 #include <utility>
 
-NativeFunction::NativeFunction(std::string name, std::size_t arity, Function function)
-    : name_(std::move(name)), arity_(arity), function_(std::move(function)) {}
+NativeFunction::NativeFunction(std::string name, std::size_t min_arity, std::size_t max_arity, Function function)
+    : name_(std::move(name)), min_arity_(min_arity), max_arity_(max_arity), function_(std::move(function)) {}
 
 std::size_t NativeFunction::arity() const { return arity_; }
 
-Value NativeFunction::call(Interpreter &, const Token &token, const std::vector<Value> &arguments) const {
-    return function_(token, arguments);
+Value NativeFunction::call(Interpreter &interpreter, const Token &token, const std::vector<Value> &arguments) const {
+    return function_(interpreter, token, arguments);
 }
 
 std::string NativeFunction::name() const { return name_; }
@@ -39,3 +39,8 @@ Value UserFunction::call(Interpreter &interpreter, const Token &, const std::vec
 }
 
 std::string UserFunction::name() const { return declaration_->name.lexeme; }
+
+bool NativeFunction::accepts_arity(std::size_t count) const {
+    return count >= min_arity_ &&
+           count <= max_arity_;
+}

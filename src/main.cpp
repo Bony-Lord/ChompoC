@@ -1,3 +1,4 @@
+#include "config.h"
 #include "interpreter/interpreter.h"
 #include "lexer/lexer.h"
 #include "lexer/token.h"
@@ -51,31 +52,33 @@ int main(int argc, char *argv[]) {
             argc > 1 ? std::filesystem::path(argv[1]) : find_file("tests/test_code.chmp");
 
         const std::string source = read_file(source_path);
-
-        std::cout << "Source file: " << std::filesystem::absolute(source_path).string() << "\n\n";
-
+        if (ChompoConfig::EnableDebugOutput) {
+            std::cout << "Source file: " << std::filesystem::absolute(source_path).string() << "\n\n";
+        }
         Lexer lexer(source);
         auto tokens = lexer.scan_tokens();
 
-        std::cout << "====== Lexer ======\n";
+        if (ChompoConfig::EnableDebugOutput) {
+            std::cout << "====== Lexer ======\n";
 
-        for (const Token &token : tokens) {
-            std::cout << token.position.line << ':' << token.position.column << "  " << std::left << std::setw(14)
-                      << token_type_name(token.type) << std::quoted(token.lexeme) << '\n';
+            for (const Token &token : tokens) {
+                std::cout << token.position.line << ':' << token.position.column << "  " << std::left << std::setw(14)
+                          << token_type_name(token.type) << std::quoted(token.lexeme) << '\n';
+            }
         }
-
-        std::cout << "====== Parser ======\n";
 
         Parser parser(std::move(tokens));
         Program program = parser.parse();
 
-        std::cout << "Parsed " << program.size() << " top-level statements\n";
+        if (ChompoConfig::EnableDebugOutput) {
+            std::cout << "====== Parser ======\n";
+            std::cout << "Parsed " << program.size() << " top-level statements\n";
 
-        AstPrinter printer;
-        std::cout << printer.print(program);
+            AstPrinter printer;
+            std::cout << printer.print(program);
 
-        std::cout << "====== Output ======\n";
-
+            std::cout << "====== Output ======\n";
+        }
         Interpreter interpreter(std::cout);
         interpreter.interpret(program);
     } catch (const std::exception &exception) {
