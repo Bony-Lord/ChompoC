@@ -1,8 +1,11 @@
 #include "interpreter.h"
+#include "callable.h"
 #include "runtime_error.h"
 
 #include <charconv>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -291,10 +294,118 @@ namespace {
             throw RuntimeError(operation, "unknown binary operator '" + operation.lexeme + "'");
         }
     }
+
+    Value convert_to_int(const Token &token, const Value &value) {
+        if (value.is_bool() || value.is_integer())
+            return Value(value.number_as_integer());
+
+        if (value.is_double()) {
+            const double number = value.number_as_double();
+
+            if (!std::isfinite(number)) {
+                throw RuntimeError(token, "cannot convert non-finite double to integer");
+            }
+
+            const long double extended = number;
+
+            if (extended < static_cast<long double>(std::numeric_limits<std::int64_t>::min()) ||
+                extended > static_cast<long double>(std::numeric_limits<std::int64_t>::max())) {
+                throw RuntimeError(token, "double is outside the integer range");
+            }
+
+            return Value(static_cast<std::int64_t>(number));
+        }
+
+        if (value.is_string()) {
+            const std::string &string = std::get<std::string>(value.data);
+
+            std::int64_t result = 0;
+
+            const char *begin = string.data();
+            const char *end = begin + string.size();
+
+            const auto [position, error] = std::from_chars(begin, end, result);
+
+            if (error != std::errc{} || position != end) {
+                throw RuntimeError(token, "cannot convert '" + string + "' to integer");
+            }
+
+            return Value(result);
+        }
+
+        if (value.is_null())
+            return Value(std::int64_t{0});
+
+        throw RuntimeError(token, "cannot convert " + value.type_name() + " to integer");
+    }
+
+    Value convert_to_double(const Token &token, const Value &value) {
+        if (value.is_number())
+            return Value(value.number_as_double());
+
+        if (value.is_string()) {
+            const std::string &string = std::get<std::string>(value.data);
+
+            double result = 0.0;
+
+            const char *begin = string.data();
+            const char *end = begin + string.size();
+
+            const auto [position, error] = std::from_chars(begin, end, result, std::chars_format::general);
+
+            if (error != std::errc{} || position != end) {
+                throw RuntimeError(token, "cannot convert '" + string + "' to double");
+            }
+
+            return Value(result);
+        }
+
+        if (value.is_null())
+            return Value(0.0);
+
+        throw RuntimeError(token, "cannot convert " + value.type_name() + " to double");
+    }
+
+    Value convert_to_bool(const Value &value) { return Value(value.is_truthy()); }
+
+    Value convert_to_string(const Token &token, const Value &value) {
+        if (value.is_array()) {
+            throw RuntimeError(token, "array to string conversion requires an array of characters");
+        }
+
+        if (value.is_callable()) {
+            throw RuntimeError(token, "cannot convert function to string");
+        }
+
+        return Value(value.to_string());
+    }
+
+    CallablePtr make_native(std::string name, NativeFunction::Function function) {
+        return std::make_shared<NativeFunction>(std::move(name), 1, std::move(function));
+    }
 } // namespace
 
 Interpreter::Interpreter(std::ostream &output)
-    : globals_(std::make_shared<Environment>()), environment_(globals_), output_(output) {}
+    : globals_(std::make_shared<Environment>()), environment_(globals_), output_(output) {
+    globals_->define("Int", Value(make_native("Int", [](const Token &token, const std::vector<Value> &arguments) {
+                         return convert_to_int(token, arguments[0]);
+                     })));
+
+    globals_->define("Double", Value(make_native("Double", [](const Token &token, const std::vector<Value> &arguments) {
+                         return convert_to_double(token, arguments[0]);
+                     })));
+
+    globals_->define("Bool", Value(make_native("Bool", [](const Token &, const std::vector<Value> &arguments) {
+                         return convert_to_bool(arguments[0]);
+                     })));
+
+    globals_->define("String", Value(make_native("String", [](const Token &token, const std::vector<Value> &arguments) {
+                         return convert_to_string(token, arguments[0]);
+                     })));
+    globals_->define("Type", Value(make_native("Type", [](const Token &token, const std::vector<Value> &arguments) {
+                         return Value(arguments[0].type_name());
+                     })));
+}
 
 void Interpreter::interpret(const Program &program) {
     for (const StmtPtr &statement : program) {
@@ -314,7 +425,7 @@ Value Interpreter::evaluate_node(const LiteralExpr &expression) {
     const Token &token = expression.value;
     switch (token.type) {
     case TokenType::Number:
-        return Value(parse_number(token));
+        return parse_number(token);
     case TokenType::String:
         return Value(parse_string(token));
     case TokenType::True:
@@ -327,11 +438,8 @@ Value Interpreter::evaluate_node(const LiteralExpr &expression) {
         throw RuntimeError(token, "invalid literal");
     }
 }
-
 Value Interpreter::evaluate_node(const VariableExpr &expression) { return environment_->get(expression.name); }
-
 Value Interpreter::evaluate_node(const GroupingExpr &expression) { return evaluate(*expression.expression); }
-
 Value Interpreter::evaluate_node(const AssignmentExpr &expression) {
     const Value right = evaluate(*expression.value);
 
@@ -346,7 +454,6 @@ Value Interpreter::evaluate_node(const AssignmentExpr &expression) {
     environment_->assign(expression.name, result);
     return result;
 }
-
 Value Interpreter::evaluate_node(const ArrayExpr &expression) {
     auto array = std::make_shared<ArrayValue>();
     array->reserve(expression.elements.size());
@@ -355,17 +462,14 @@ Value Interpreter::evaluate_node(const ArrayExpr &expression) {
     }
     return Value(std::move(array));
 }
-
 Value Interpreter::evaluate_node(const UnaryExpr &expression) {
     const Value right = evaluate(*expression.right);
 
     switch (expression.operation.type) {
     case TokenType::Minus:
         if (!right.is_number()) {
-            throw RuntimeError(
-                expression.operation,
-                "operator '-' requires a numeric operand, got " +
-                    right.type_name());
+            throw RuntimeError(expression.operation,
+                               "operator '-' requires a numeric operand, got " + right.type_name());
         }
 
         if (right.is_double())
@@ -381,7 +485,6 @@ Value Interpreter::evaluate_node(const UnaryExpr &expression) {
                            "Interpreter: unknown unary operator '" + expression.operation.lexeme + "'");
     }
 }
-
 Value Interpreter::evaluate_node(const BinaryExpr &expression) {
     const Value left = evaluate(*expression.left);
 
@@ -403,13 +506,35 @@ Value Interpreter::evaluate_node(const BinaryExpr &expression) {
 
     return apply_binary(expression.operation, left, right);
 }
-
 Value Interpreter::evaluate_node(const CallExpr &expression) {
-    throw RuntimeError(expression.closing_parenthesis, "Interpreter: functions are not supported yet");
+    const Value callee = evaluate(*expression.callee);
+
+    if (!callee.is_callable()) {
+        throw RuntimeError(expression.closing_parenthesis, "value of type " + callee.type_name() + " is not callable");
+    }
+
+    const CallablePtr &callable = std::get<CallablePtr>(callee.data);
+
+    if (!callable) {
+        throw RuntimeError(expression.closing_parenthesis, "cannot call NULL function");
+    }
+
+    std::vector<Value> arguments;
+    arguments.reserve(expression.arguments.size());
+
+    for (const ExprPtr &argument : expression.arguments)
+        arguments.push_back(evaluate(*argument));
+
+    if (arguments.size() != callable->arity()) {
+        throw RuntimeError(expression.closing_parenthesis, "function '" + callable->name() + "' expects " +
+                                                               std::to_string(callable->arity()) +
+                                                               " argument(s), got " + std::to_string(arguments.size()));
+    }
+
+    return callable->call(expression.closing_parenthesis, arguments);
 }
 
 void Interpreter::execute_node(const ExpressionStmt &statement) { evaluate(*statement.expression); }
-
 void Interpreter::execute_node(const VarStmt &statement) {
     Value value = statement.is_array ? Value(std::make_shared<ArrayValue>()) : Value(nullptr);
 
@@ -421,15 +546,21 @@ void Interpreter::execute_node(const VarStmt &statement) {
 
     environment_->define(statement.name, std::move(value));
 }
-
 void Interpreter::execute_node(const PrintStmt &statement) {
     for (const auto &arg : statement.arguments) {
         output_ << evaluate(*arg).to_string();
     }
 }
-
 void Interpreter::execute_node(const BlockStmt &statement) {
     execute_block(statement.statements, std::make_shared<Environment>(environment_));
+}
+void Interpreter::execute_node(const IfStmt &statement) {
+    if (evaluate(*statement.condition).is_truthy()) {
+        execute(*statement.then_branch);
+        return;
+    }
+    if (statement.else_branch)
+        execute(*statement.else_branch);
 }
 
 void Interpreter::execute_block(const std::vector<StmtPtr> &statements, std::shared_ptr<Environment> environment) {
@@ -444,13 +575,4 @@ void Interpreter::execute_block(const std::vector<StmtPtr> &statements, std::sha
         throw;
     }
     environment_ = previous;
-}
-
-void Interpreter::execute_node(const IfStmt &statement) {
-    if (evaluate(*statement.condition).is_truthy()) {
-        execute(*statement.then_branch);
-        return;
-    }
-    if (statement.else_branch)
-        execute(*statement.else_branch);
 }

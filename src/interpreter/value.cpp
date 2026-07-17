@@ -1,4 +1,5 @@
 #include "value.h"
+#include "callable.h"
 
 #include <iomanip>
 #include <sstream>
@@ -13,19 +14,15 @@ Value::Value(std::int64_t value) : data(value) {}
 Value::Value(std::string value) : data(std::move(value)) {}
 Value::Value(const char *value) : data(std::string(value)) {}
 Value::Value(double value) : data(value) {}
+Value::Value(CallablePtr callable) : data(callable) {}
 
-bool Value::is_null() const {
-    return std::holds_alternative<std::monostate>(data);
-}
+bool Value::is_null() const { return std::holds_alternative<std::monostate>(data); }
 bool Value::is_bool() const { return std::holds_alternative<bool>(data); }
-bool Value::is_integer() const {
-    return std::holds_alternative<std::int64_t>(data);
-}
-bool Value::is_string() const {
-    return std::holds_alternative<std::string>(data);
-}
+bool Value::is_integer() const { return std::holds_alternative<std::int64_t>(data); }
+bool Value::is_string() const { return std::holds_alternative<std::string>(data); }
 bool Value::is_array() const { return std::holds_alternative<ArrayPtr>(data); }
 bool Value::is_double() const { return std::holds_alternative<double>(data); }
+bool Value::is_callable() const { return std::holds_alternative<CallablePtr>(data); }
 
 bool Value::is_truthy() const {
     if (is_null())
@@ -44,9 +41,7 @@ bool Value::is_truthy() const {
     return true;
 }
 
-bool Value::is_number() const {
-    return is_bool() || is_integer() || is_double();
-}
+bool Value::is_number() const { return is_bool() || is_integer() || is_double(); }
 
 bool Value::is_integer_number() const { return is_bool() || is_integer(); }
 
@@ -86,6 +81,8 @@ std::string Value::type_name() const {
         return "array";
     if (is_double())
         return "double";
+    if (is_callable())
+        return "callable";
     return "unknown";
 }
 
@@ -118,6 +115,12 @@ std::string Value::to_string() const {
         std::ostringstream output;
         output << std::setprecision(15) << *doubler;
         return output.str();
+    }
+    if (const auto *callable = std::get_if<CallablePtr>(&data)) {
+        if (!*callable)
+            return "<function>";
+
+        return "<function " + (*callable)->name() + ">";
     }
 
     return "<unknown>";

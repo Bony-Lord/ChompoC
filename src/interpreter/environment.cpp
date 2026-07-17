@@ -2,6 +2,7 @@
 #include "runtime_error.h"
 
 #include <utility>
+#include <stdexcept>
 
 Environment::Environment(std::shared_ptr<Environment> parent) : parent_(std::move(parent)) {}
 
@@ -10,6 +11,14 @@ void Environment::define(const Token &name, Value value) {
         throw RuntimeError(name, "variable '" + name.lexeme + "' is already declared in this scope");
     }
     values_.emplace(name.lexeme, std::move(value));
+}
+void Environment::define(std::string name, Value value) {
+    if (values_.contains(name)) {
+        throw std::logic_error(
+            "global value '" + name + "' is already defined");
+    }
+
+    values_.emplace(std::move(name), std::move(value));
 }
 
 Value Environment::get(const Token &name) const {
