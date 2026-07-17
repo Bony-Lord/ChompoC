@@ -17,7 +17,6 @@ class Callable {
 public:
     virtual ~Callable() = default;
 
-    virtual std::size_t arity() const = 0;
     virtual Value call(Interpreter &interpreter, const Token &token, const std::vector<Value> &arguments) const = 0;
     virtual std::string name() const = 0;
     virtual bool accepts_arity(std::size_t count) const = 0;
@@ -30,15 +29,14 @@ public:
 
     NativeFunction(std::string name, std::size_t min_arity, std::size_t max_arity, Function function);
 
-    std::size_t arity() const override;
     Value call(Interpreter &interpreter, const Token &token, const std::vector<Value> &arguments) const override;
     std::string name() const override;
 
     bool accepts_arity(std::size_t count) const override;
+    std::string arity_description() const override;
 
 private:
     std::string name_;
-    std::size_t arity_;
     Function function_;
     std::size_t min_arity_;
     std::size_t max_arity_;
@@ -48,9 +46,10 @@ class UserFunction final : public Callable {
 public:
     UserFunction(const FunctionStmt &declaration, std::shared_ptr<Environment> closure);
 
-    std::size_t arity() const override;
     Value call(Interpreter &interpreter, const Token &token, const std::vector<Value> &arguments) const override;
     std::string name() const override;
+    std::string arity_description() const override;
+    bool accepts_arity(std::size_t count) const override;
 
 private:
     const FunctionStmt *declaration_;

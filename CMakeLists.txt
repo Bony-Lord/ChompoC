@@ -34,3 +34,27 @@ add_executable(Chompo
 )
 
 target_include_directories(Chompo PRIVATE src)
+
+include(CTest)
+
+function(add_chompo_test
+        name
+        expected_exit
+        use_stderr)
+    add_test(
+            NAME ${name}
+            COMMAND ${CMAKE_COMMAND}
+            -DCHOMPO_EXECUTABLE=$<TARGET_FILE:Chompo>
+            -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/cases/${name}.chmp
+            -DEXPECTED_FILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/expected/${name}.txt
+            -DEXPECTED_EXIT_CODE=${expected_exit}
+            -DUSE_STDERR=${use_stderr}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_case.cmake
+    )
+endfunction()
+
+add_chompo_test(basic 0 FALSE)
+add_chompo_test(arrays 0 FALSE)
+add_chompo_test(functions 0 FALSE)
+add_chompo_test(updates 0 FALSE)
+add_chompo_test(stack_overflow 1 TRUE)

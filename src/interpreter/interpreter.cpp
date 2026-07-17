@@ -538,8 +538,13 @@ namespace {
         return Value(std::move(result));
     }
 
-    CallablePtr make_native(std::string name, NativeFunction::Function function) {
-        return std::make_shared<NativeFunction>(std::move(name), 1, std::move(function));
+    CallablePtr make_native(std::string name, std::size_t min_arity, std::size_t max_arity,
+                            NativeFunction::Function function) {
+        return std::make_shared<NativeFunction>(std::move(name), min_arity, max_arity, std::move(function));
+    }
+
+    CallablePtr make_native(std::string name, std::size_t arity, NativeFunction::Function function) {
+        return make_native(std::move(name), arity, arity, std::move(function));
     }
 
     Value sequence_length(const Token &token, const Value &value) {
@@ -580,38 +585,50 @@ namespace {
 
 Interpreter::Interpreter(std::ostream &output, std::ostream &diagnostics)
     : globals_(std::make_shared<Environment>()), environment_(globals_), output_(output), diagnostics_(diagnostics) {
-    globals_->define("Int", Value(make_native("Int", [](const Token &token, const std::vector<Value> &arguments) {
-                         return convert_to_int(token, arguments[0]);
-                     })));
+    globals_->define(
+        "Int", Value(make_native("Int", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+            return convert_to_int(token, arguments[0]);
+        })));
 
-    globals_->define("Double", Value(make_native("Double", [](const Token &token, const std::vector<Value> &arguments) {
-                         return convert_to_double(token, arguments[0]);
-                     })));
+    globals_->define(
+        "Double",
+        Value(make_native("Double", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+            return convert_to_double(token, arguments[0]);
+        })));
 
-    globals_->define("Bool", Value(make_native("Bool", [](const Token &, const std::vector<Value> &arguments) {
-                         return convert_to_bool(arguments[0]);
-                     })));
+    globals_->define(
+        "Bool", Value(make_native("Bool", 1, [](Interpreter &, const Token &, const std::vector<Value> &arguments) {
+            return convert_to_bool(arguments[0]);
+        })));
 
-    globals_->define("String", Value(make_native("String", [](const Token &token, const std::vector<Value> &arguments) {
-                         return convert_to_string(token, arguments[0]);
-                     })));
-    globals_->define("Type", Value(make_native("Type", [](const Token &token, const std::vector<Value> &arguments) {
-                         return Value(arguments[0].type_name());
-                     })));
-    globals_->define("Char", Value(make_native("Char", [](const Token &token, const std::vector<Value> &arguments) {
-                         return convert_to_char(token, arguments[0]);
-                     })));
+    globals_->define(
+        "String",
+        Value(make_native("String", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+            return convert_to_string(token, arguments[0]);
+        })));
+    globals_->define("Type", Value(make_native(
+                                 "Type", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                                     return Value(arguments[0].type_name());
+                                 })));
+    globals_->define("Char", Value(make_native(
+                                 "Char", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                                     return convert_to_char(token, arguments[0]);
+                                 })));
 
-    globals_->define("Array", Value(make_native("Array", [](const Token &token, const std::vector<Value> &arguments) {
-                         return convert_to_array(token, arguments[0]);
-                     })));
+    globals_->define(
+        "Array",
+        Value(make_native("Array", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+            return convert_to_array(token, arguments[0]);
+        })));
 
-    globals_->define("CATS", Value(make_native("CATS", [](const Token &token, const std::vector<Value> &arguments) {
-                         return convert_char_array_to_string(token, arguments[0]);
-                     })));
-    globals_->define("len", Value(make_native("len", [](const Token &token, const std::vector<Value> &arguments) {
-                         return sequence_length(token, arguments[0]);
-                     })));
+    globals_->define("CATS", Value(make_native(
+                                 "CATS", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                                     return convert_char_array_to_string(token, arguments[0]);
+                                 })));
+    globals_->define(
+        "len", Value(make_native("len", 1, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+            return sequence_length(token, arguments[0]);
+        })));
 }
 
 void Interpreter::interpret(const Program &program) {
@@ -750,10 +767,10 @@ Value Interpreter::evaluate_node(const CallExpr &expression) {
     for (const ExprPtr &argument : expression.arguments)
         arguments.push_back(evaluate(*argument));
 
-    if (arguments.size() != callable->arity()) {
+    if (!callable->accepts_arity(arguments.size())) {
         throw RuntimeError(expression.closing_parenthesis, "function '" + callable->name() + "' expects " +
-                                                               std::to_string(callable->arity()) +
-                                                               " argument(s), got " + std::to_string(arguments.size()));
+                                                               callable->arity_description() + " argument(s), got " +
+                                                               std::to_string(arguments.size()));
     }
     if (call_depth_ >= ChompoConfig::MaxCallDepth) {
         throw RuntimeError(expression.closing_parenthesis, "Runtime StackOverflow: maximum call depth of " +
@@ -763,7 +780,6 @@ Value Interpreter::evaluate_node(const CallExpr &expression) {
 
     CallDepthGuard depth_guard(call_depth_);
 
-    return callable->call(*this, expression.closing_parenthesis, arguments);
     return callable->call(*this, expression.closing_parenthesis, arguments);
 }
 Value Interpreter::evaluate_node(const IndexExpr &expression) {
