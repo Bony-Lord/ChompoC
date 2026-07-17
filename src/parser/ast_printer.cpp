@@ -128,6 +128,36 @@ std::string AstPrinter::print_node(const IfStmt &statement) const {
     return result;
 }
 
+std::string AstPrinter::print_node(const FunctionStmt &statement) const {
+    std::string result = "(fun ";
+    result += statement.name.lexeme;
+    result += " (";
+
+    for (std::size_t index = 0; index < statement.parameters.size(); ++index) {
+        if (index > 0)
+            result += " ";
+
+        result += statement.parameters[index].lexeme;
+    }
+
+    result += ")";
+
+    for (const StmtPtr &child : statement.body) {
+        result += " ";
+        result += print(*child);
+    }
+
+    result += ")";
+    return result;
+}
+
+std::string AstPrinter::print_node(const ReturnStmt &statement) const {
+    if (!statement.value)
+        return "(return)";
+
+    return parenthesize("return", {statement.value.get()});
+}
+
 std::string AstPrinter::parenthesize(std::string_view name, std::initializer_list<const Expr *> expressions) const {
     std::string result = "(";
     result += name;

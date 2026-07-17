@@ -87,8 +87,19 @@ struct IfStmt {
     StmtPtr else_branch;
 };
 
+struct FunctionStmt {
+    Token name;
+    std::vector<Token> parameters;
+    std::vector<StmtPtr> body;
+};
+
+struct ReturnStmt {
+    Token keyword;
+    ExprPtr value;
+};
+
 struct Stmt {
-    using Node = std::variant<PrintStmt, BlockStmt, VarStmt, ExpressionStmt, IfStmt>;
+    using Node = std::variant<PrintStmt, BlockStmt, VarStmt, ExpressionStmt, IfStmt, FunctionStmt, ReturnStmt>;
 
     Node node;
 

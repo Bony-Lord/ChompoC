@@ -47,3 +47,47 @@ print("String(NULL) = ", String(NULL), "\n");
 var convert = Int;
 print("stored function = ", convert("42"), "\n");
 print("type of true = ", Type(true), "\n");
+
+fun add(a, b) {
+    return a + b;
+}
+
+print("add = ", add(10, 20), "\n");
+
+var operation = add;
+print("stored = ", operation(4, 5), "\n");
+
+
+fun factorial(n) {
+    if (n <= 1)
+        return 1;
+
+    return n * factorial(n - 1);
+}
+
+print("factorial = ", factorial(6), "\n");
+
+
+fun make_counter(start) {
+    var value = start;
+
+    fun next() {
+        value += 1;
+        return value;
+    }
+
+    return next;
+}
+
+var counter = make_counter(10);
+
+print(counter(), "\n");
+print(counter(), "\n");
+print(counter(), "\n");
+
+
+fun without_return() {
+    var temporary = 10;
+}
+
+print("default = ", without_return(), "\n");

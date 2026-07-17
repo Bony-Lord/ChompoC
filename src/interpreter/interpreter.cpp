@@ -1,5 +1,6 @@
 #include "interpreter.h"
 #include "callable.h"
+#include "return_signal.h"
 #include "runtime_error.h"
 
 #include <charconv>
@@ -531,7 +532,7 @@ Value Interpreter::evaluate_node(const CallExpr &expression) {
                                                                " argument(s), got " + std::to_string(arguments.size()));
     }
 
-    return callable->call(expression.closing_parenthesis, arguments);
+    return callable->call(*this, expression.closing_parenthesis, arguments);
 }
 
 void Interpreter::execute_node(const ExpressionStmt &statement) { evaluate(*statement.expression); }
@@ -561,6 +562,19 @@ void Interpreter::execute_node(const IfStmt &statement) {
     }
     if (statement.else_branch)
         execute(*statement.else_branch);
+}
+void Interpreter::execute_node(const FunctionStmt &statement) {
+    CallablePtr function = std::make_shared<UserFunction>(statement, environment_);
+
+    environment_->define(statement.name, Value(std::move(function)));
+}
+void Interpreter::execute_node(const ReturnStmt &statement) {
+    Value value(nullptr);
+
+    if (statement.value)
+        value = evaluate(*statement.value);
+
+    throw ReturnSignal(std::move(value));
 }
 
 void Interpreter::execute_block(const std::vector<StmtPtr> &statements, std::shared_ptr<Environment> environment) {

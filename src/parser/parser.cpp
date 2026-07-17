@@ -224,9 +224,10 @@ Program Parser::parse() {
 }
 
 StmtPtr Parser::declaration() {
-    if (match({TokenType::Var})) {
+    if (match({TokenType::Fun}))
+        return function_declaration();
+    if (match({TokenType::Var}))
         return var_declaration();
-    }
 
     return statement();
 }
@@ -250,6 +251,40 @@ StmtPtr Parser::var_declaration() {
 
     return std::make_unique<Stmt>(VarStmt{name, is_array, std::move(initializer)});
 }
+StmtPtr Parser::function_declaration() {
+    const Token name =
+        consume(TokenType::Identifier, "expected function name after 'fun'");
+
+    consume(TokenType::LeftParen,
+            "expected '(' after function name");
+
+    std::vector<Token> parameters;
+
+    if (!check(TokenType::RightParen)) {
+        do {
+            parameters.push_back(
+                consume(TokenType::Identifier,
+                        "expected parameter name"));
+        } while (match({TokenType::Comma}));
+    }
+
+    consume(TokenType::RightParen,
+            "expected ')' after function parameters");
+
+    consume(TokenType::LeftBrace,
+            "expected '{' before function body");
+
+    ++function_depth_;
+    std::vector<StmtPtr> body = block();
+    --function_depth_;
+
+    return std::make_unique<Stmt>(
+        FunctionStmt{
+            name,
+            std::move(parameters),
+            std::move(body)
+        });
+}
 
 StmtPtr Parser::statement() {
     if (match({TokenType::Print}))
@@ -258,6 +293,8 @@ StmtPtr Parser::statement() {
         return block_statement();
     if (match({TokenType::If}))
         return if_statement();
+    if (match({TokenType::Return}))
+        return return_statement();
     return expression_statement();
 }
 
@@ -277,7 +314,23 @@ StmtPtr Parser::print_statement() {
 
     return std::make_unique<Stmt>(PrintStmt{std::move(arguments)});
 }
+StmtPtr Parser::return_statement() {
+    const Token keyword = previous();
 
+    if (function_depth_ == 0)
+        error(keyword, "cannot return from top-level code");
+
+    ExprPtr value;
+
+    if (!check(TokenType::Semicolon))
+        value = expression();
+
+    consume(TokenType::Semicolon,
+            "expected ';' after return value");
+
+    return std::make_unique<Stmt>(
+        ReturnStmt{keyword, std::move(value)});
+}
 StmtPtr Parser::expression_statement() {
     ExprPtr value = expression();
 
@@ -285,9 +338,7 @@ StmtPtr Parser::expression_statement() {
 
     return std::make_unique<Stmt>(ExpressionStmt{std::move(value)});
 }
-
 StmtPtr Parser::block_statement() { return std::make_unique<Stmt>(BlockStmt{block()}); }
-
 std::vector<StmtPtr> Parser::block() {
     std::vector<StmtPtr> statements;
 
@@ -298,7 +349,6 @@ std::vector<StmtPtr> Parser::block() {
     consume(TokenType::RightBrace, "expected '}' after block");
     return statements;
 }
-
 StmtPtr Parser::if_statement() {
     consume(TokenType::LeftParen, "expected '(' after 'if'");
     ExprPtr condition = expression();
