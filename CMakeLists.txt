@@ -27,6 +27,9 @@ add_executable(Chompo
         src/interpreter/environment.cpp
         src/interpreter/interpreter.h
         src/interpreter/interpreter.cpp
+        src/interpreter/callable.h
+        src/interpreter/callable.cpp
+        src/interpreter/return_signal.h
 )
 
 target_include_directories(Chompo PRIVATE src)

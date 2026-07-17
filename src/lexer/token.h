@@ -21,7 +21,7 @@ enum class TokenType {
 
     PlusEq,   // +=
     MinusEq,  // -=
-    PowEq,    // *=
+    MulEq,    // *=
     DivideEq, // /=
 
     Plus,    // +

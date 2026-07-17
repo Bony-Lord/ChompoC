@@ -28,17 +28,15 @@ std::filesystem::path find_file(const std::filesystem::path &relative_path) {
         directory = parent;
     }
 
-    throw std::runtime_error(
-        "Failed to find source file: " + relative_path.string() +
-        "\nWorking directory: " + std::filesystem::current_path().string());
+    throw std::runtime_error("Failed to find source file: " + relative_path.string() +
+                             "\nWorking directory: " + std::filesystem::current_path().string());
 }
 
 std::string read_file(const std::filesystem::path &path) {
     std::ifstream file(path);
 
     if (!file) {
-        throw std::runtime_error("Failed to open source file: " +
-                                 std::filesystem::absolute(path).string());
+        throw std::runtime_error("Failed to open source file: " + std::filesystem::absolute(path).string());
     }
 
     std::ostringstream buffer;
@@ -50,13 +48,11 @@ std::string read_file(const std::filesystem::path &path) {
 int main(int argc, char *argv[]) {
     try {
         const std::filesystem::path source_path =
-            argc > 1 ? std::filesystem::path(argv[1])
-                     : find_file("tests/test_code.chmp");
+            argc > 1 ? std::filesystem::path(argv[1]) : find_file("tests/test_code.chmp");
 
         const std::string source = read_file(source_path);
 
-        std::cout << "Source file: "
-                  << std::filesystem::absolute(source_path).string() << "\n\n";
+        std::cout << "Source file: " << std::filesystem::absolute(source_path).string() << "\n\n";
 
         Lexer lexer(source);
         auto tokens = lexer.scan_tokens();
@@ -64,10 +60,8 @@ int main(int argc, char *argv[]) {
         std::cout << "====== Lexer ======\n";
 
         for (const Token &token : tokens) {
-            std::cout << token.position.line << ':' << token.position.column
-                      << "  " << std::left << std::setw(14)
-                      << token_type_name(token.type)
-                      << std::quoted(token.lexeme) << '\n';
+            std::cout << token.position.line << ':' << token.position.column << "  " << std::left << std::setw(14)
+                      << token_type_name(token.type) << std::quoted(token.lexeme) << '\n';
         }
 
         std::cout << "====== Parser ======\n";

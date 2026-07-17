@@ -1,23 +1,93 @@
-var result = 0;
-var numbers[] = {1, 2 + 3, 4};
+print("true + true = ", true + true, "\n");
+print("true + 10 = ", true + 10, "\n");
+print("true + 2.5 = ", true + 2.5, "\n");
 
-result = result + 10;
-result += 5;
-print("result: ", result, " numbers: ", numbers, "\n");
-//sum(numbers, result);
-var a = 1;
-var b = 0;
+print("5 / 2 = ", 5 / 2, "\n");
+print("5 / 2.0 = ", 5 / 2.0, "\n");
 
-print("a + b(true + false)=", a + b, "\n");
-{
-    var inner = 42;
-    print("inner = ", inner, "\n");
+print("true == 1: ", true == 1, "\n");
+print("false == 0.0: ", false == 0.0, "\n");
+print("1 == 1.0: ", 1 == 1.0, "\n");
+
+print("string: ", "value = " + 10, "\n");
+print("reverse: ", true + " result", "\n");
+
+print("repeat: ", "ab" * 3, "\n");
+print("reverse repeat: ", 2 * "cd", "\n");
+
+var value = true;
+value += true;
+
+print("value = ", value, "\n");
+
+var number = 10;
+number += 2.5;
+
+print("number = ", number, "\n");
+
+print("Int(true) = ", Int(true), "\n");
+print("Int(12.9) = ", Int(12.9), "\n");
+print("Int(\"-15\") = ", Int("-15"), "\n");
+print("Int(NULL) = ", Int(NULL), "\n");
+
+print("Double(true) = ", Double(true), "\n");
+print("Double(10) = ", Double(10), "\n");
+print("Double(\"2.75\") = ", Double("2.75"), "\n");
+
+print("Bool(0) = ", Bool(0), "\n");
+print("Bool(2.5) = ", Bool(2.5), "\n");
+print("Bool(\"\") = ", Bool(""), "\n");
+print("Bool(\"text\") = ", Bool("text"), "\n");
+
+print("String(true) = ", String(true), "\n");
+print("String(10) = ", String(10), "\n");
+print("String(2.5) = ", String(2.5), "\n");
+print("String(NULL) = ", String(NULL), "\n");
+
+var convert = Int;
+print("stored function = ", convert("42"), "\n");
+print("type of true = ", Type(true), "\n");
+
+fun add(a, b) {
+    return a + b;
 }
 
-if (true) {
-    if (false)
-        print("first");
-     else {
-        print("second");
+print("add = ", add(10, 20), "\n");
+
+var operation = add;
+print("stored = ", operation(4, 5), "\n");
+
+
+fun factorial(n) {
+    if (n <= 1)
+        return 1;
+
+    return n * factorial(n - 1);
+}
+
+print("factorial = ", factorial(6), "\n");
+
+
+fun make_counter(start) {
+    var value = start;
+
+    fun next() {
+        value += 1;
+        return value;
     }
+
+    return next;
 }
+
+var counter = make_counter(10);
+
+print(counter(), "\n");
+print(counter(), "\n");
+print(counter(), "\n");
+
+
+fun without_return() {
+    var temporary = 10;
+}
+
+print("default = ", without_return(), "\n");

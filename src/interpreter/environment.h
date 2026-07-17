@@ -10,6 +10,7 @@
 class Environment {
 public:
     explicit Environment(std::shared_ptr<Environment> parent = nullptr);
+    void define(std::string name, Value value);
 
     void define(const Token &name, Value value);
     Value get(const Token &name) const;

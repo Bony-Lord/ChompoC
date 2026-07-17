@@ -33,7 +33,6 @@ struct GroupingExpr {
     ExprPtr expression;
 };
 
-
 struct AssignmentExpr {
     Token name;
     Token op;
@@ -51,12 +50,12 @@ struct ArrayExpr {
 };
 
 struct Expr {
-    using Node = std::variant<LiteralExpr, UnaryExpr, BinaryExpr, GroupingExpr, VariableExpr, AssignmentExpr, CallExpr, ArrayExpr>;
+    using Node = std::variant<LiteralExpr, UnaryExpr, BinaryExpr, GroupingExpr, VariableExpr, AssignmentExpr, CallExpr,
+                              ArrayExpr>;
 
     Node node;
 
-    template <class T>
-    explicit Expr(T value) : node(std::move(value)) {}
+    template <class T> explicit Expr(T value) : node(std::move(value)) {}
 };
 
 struct Stmt;
@@ -88,13 +87,21 @@ struct IfStmt {
     StmtPtr else_branch;
 };
 
+struct FunctionStmt {
+    Token name;
+    std::vector<Token> parameters;
+    std::vector<StmtPtr> body;
+};
+
+struct ReturnStmt {
+    Token keyword;
+    ExprPtr value;
+};
+
 struct Stmt {
-    using Node = std::variant<PrintStmt, BlockStmt, VarStmt, ExpressionStmt, IfStmt>;
+    using Node = std::variant<PrintStmt, BlockStmt, VarStmt, ExpressionStmt, IfStmt, FunctionStmt, ReturnStmt>;
 
     Node node;
 
-    template<class T>
-    explicit Stmt(T value)
-        : node(std::move(value)) {
-    }
+    template <class T> explicit Stmt(T value) : node(std::move(value)) {}
 };
