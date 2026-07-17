@@ -15,6 +15,7 @@ Value::Value(std::string value) : data(std::move(value)) {}
 Value::Value(const char *value) : data(std::string(value)) {}
 Value::Value(double value) : data(value) {}
 Value::Value(CallablePtr callable) : data(callable) {}
+Value::Value(char value) : data(value) {}
 
 bool Value::is_null() const { return std::holds_alternative<std::monostate>(data); }
 bool Value::is_bool() const { return std::holds_alternative<bool>(data); }
@@ -23,6 +24,7 @@ bool Value::is_string() const { return std::holds_alternative<std::string>(data)
 bool Value::is_array() const { return std::holds_alternative<ArrayPtr>(data); }
 bool Value::is_double() const { return std::holds_alternative<double>(data); }
 bool Value::is_callable() const { return std::holds_alternative<CallablePtr>(data); }
+bool Value::is_char() const { return std::holds_alternative<char>(data); }
 
 bool Value::is_truthy() const {
     if (is_null())
@@ -37,20 +39,23 @@ bool Value::is_truthy() const {
         return !string->empty();
     if (const auto *array = std::get_if<ArrayPtr>(&data))
         return *array && !(*array)->empty();
+    if (const auto *character = std::get_if<char>(&data))
+        return *character != 0;
 
     return true;
 }
 
-bool Value::is_number() const { return is_bool() || is_integer() || is_double(); }
+bool Value::is_number() const { return is_bool() || is_integer() || is_double() || is_char(); }
 
-bool Value::is_integer_number() const { return is_bool() || is_integer(); }
+bool Value::is_integer_number() const { return is_bool() || is_integer() || is_char(); }
 
 std::int64_t Value::number_as_integer() const {
     if (const auto *boolean = std::get_if<bool>(&data))
         return *boolean ? 1 : 0;
-
     if (const auto *integer = std::get_if<std::int64_t>(&data))
         return *integer;
+    if (const auto *character = std::get_if<char>(&data))
+        return *character;
 
     throw std::logic_error("value is not an integer number");
 }
@@ -58,12 +63,12 @@ std::int64_t Value::number_as_integer() const {
 double Value::number_as_double() const {
     if (const auto *boolean = std::get_if<bool>(&data))
         return *boolean ? 1.0 : 0.0;
-
     if (const auto *integer = std::get_if<std::int64_t>(&data))
         return static_cast<double>(*integer);
-
     if (const auto *number = std::get_if<double>(&data))
         return *number;
+    if (const auto *character = std::get_if<char>(&data))
+        return *character;
 
     throw std::logic_error("value is not numeric");
 }
@@ -83,6 +88,8 @@ std::string Value::type_name() const {
         return "double";
     if (is_callable())
         return "callable";
+    if (is_char())
+        return "char";
     return "unknown";
 }
 
@@ -122,6 +129,8 @@ std::string Value::to_string() const {
 
         return "<function " + (*callable)->name() + ">";
     }
+    if (const auto *character = std::get_if<char>(&data))
+        return std::string(1, *character);
 
     return "<unknown>";
 }

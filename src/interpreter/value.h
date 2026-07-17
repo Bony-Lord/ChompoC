@@ -15,7 +15,7 @@ class Callable;
 using CallablePtr = std::shared_ptr<Callable>;
 
 struct Value {
-    using Storage = std::variant<std::monostate /*NULL*/, bool, std::int64_t, std::string, ArrayPtr, double, CallablePtr>;
+    using Storage = std::variant<std::monostate /*NULL*/, bool, std::int64_t, std::string, ArrayPtr, double, CallablePtr, char>;
 
     Storage data;
 
@@ -28,6 +28,7 @@ struct Value {
     Value(ArrayPtr value);
     Value(double value);
     Value(CallablePtr value);
+    Value(char value);
 
     bool is_null() const;
     bool is_bool() const;
@@ -38,6 +39,7 @@ struct Value {
     bool is_string() const;
     bool is_array() const;
     bool is_callable() const;
+    bool is_char() const;
 
     std::int64_t number_as_integer() const;
     double number_as_double() const;

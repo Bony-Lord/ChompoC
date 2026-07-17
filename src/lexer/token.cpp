@@ -75,6 +75,8 @@ std::string_view token_type_name(TokenType type) {
         return "Number";
     case TokenType::String:
         return "String";
+    case TokenType::Char:
+        return "Char";
 
     case TokenType::Var:
         return "Var";
@@ -106,6 +108,8 @@ std::string_view token_type_name(TokenType type) {
         return "Fun";
     case TokenType::Return:
         return "Return";
+    case TokenType::Array:
+        return "Array";
     }
     return "Unknown";
 }

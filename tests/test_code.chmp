@@ -91,3 +91,21 @@ fun without_return() {
 }
 
 print("default = ", without_return(), "\n");
+
+var chars = Array("acd");
+
+print(chars, "\n");
+print(String(chars), "\n");
+print(CATS(chars), "\n");
+
+print(Array{'h', 'i'}, "\n");
+print(CATS(Array{'h', 'i'}), "\n");
+
+print(Char("A"), "\n");
+print(Char(66), "\n");
+print(Int('A'), "\n");
+
+var constructor = Array;
+print(constructor("xy"), "\n");
+
+var x = Array{1, 2};

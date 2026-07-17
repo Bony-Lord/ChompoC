@@ -45,6 +45,7 @@ enum class TokenType {
     Identifier,
     Number,
     String,
+    Char,
 
     // Ключевые слова
     Var,
@@ -63,6 +64,7 @@ enum class TokenType {
     Fun,
     Class,
     In,
+    Array,
 
     Count
 };

@@ -110,8 +110,8 @@ const Parser::ParseRule &Parser::get_rule(TokenType type) {
         result[token_index(TokenType::AndAnd)] = {nullptr, &Parser::binary, Precedence::And};
         result[token_index(TokenType::OrOr)] = {nullptr, &Parser::binary, Precedence::Or};
         result[token_index(TokenType::Equal)] = {nullptr, &Parser::assignment, Precedence::Assignment};
-        result[token_index(TokenType::LeftBrace)] = {&Parser::array_literal, nullptr, Precedence::None};
-
+        result[token_index(TokenType::Char)] = {&Parser::literal, nullptr, Precedence::None};
+        result[token_index(TokenType::Array)] = {&Parser::array_expression, nullptr, Precedence::None};
         return result;
     }();
 
@@ -171,6 +171,14 @@ ExprPtr Parser::array_literal() {
     }
     consume(TokenType::RightBrace, "expected '}' after array elements");
     return std::make_unique<Expr>(ArrayExpr{std::move(elements)});
+}
+ExprPtr Parser::array_expression() {
+    const Token name = previous();
+
+    if (match({TokenType::LeftBrace}))
+        return array_literal();
+
+    return std::make_unique<Expr>(VariableExpr{name});
 }
 
 ExprPtr Parser::binary(ExprPtr left) {
@@ -252,38 +260,27 @@ StmtPtr Parser::var_declaration() {
     return std::make_unique<Stmt>(VarStmt{name, is_array, std::move(initializer)});
 }
 StmtPtr Parser::function_declaration() {
-    const Token name =
-        consume(TokenType::Identifier, "expected function name after 'fun'");
+    const Token name = consume(TokenType::Identifier, "expected function name after 'fun'");
 
-    consume(TokenType::LeftParen,
-            "expected '(' after function name");
+    consume(TokenType::LeftParen, "expected '(' after function name");
 
     std::vector<Token> parameters;
 
     if (!check(TokenType::RightParen)) {
         do {
-            parameters.push_back(
-                consume(TokenType::Identifier,
-                        "expected parameter name"));
+            parameters.push_back(consume(TokenType::Identifier, "expected parameter name"));
         } while (match({TokenType::Comma}));
     }
 
-    consume(TokenType::RightParen,
-            "expected ')' after function parameters");
+    consume(TokenType::RightParen, "expected ')' after function parameters");
 
-    consume(TokenType::LeftBrace,
-            "expected '{' before function body");
+    consume(TokenType::LeftBrace, "expected '{' before function body");
 
     ++function_depth_;
     std::vector<StmtPtr> body = block();
     --function_depth_;
 
-    return std::make_unique<Stmt>(
-        FunctionStmt{
-            name,
-            std::move(parameters),
-            std::move(body)
-        });
+    return std::make_unique<Stmt>(FunctionStmt{name, std::move(parameters), std::move(body)});
 }
 
 StmtPtr Parser::statement() {
@@ -325,11 +322,9 @@ StmtPtr Parser::return_statement() {
     if (!check(TokenType::Semicolon))
         value = expression();
 
-    consume(TokenType::Semicolon,
-            "expected ';' after return value");
+    consume(TokenType::Semicolon, "expected ';' after return value");
 
-    return std::make_unique<Stmt>(
-        ReturnStmt{keyword, std::move(value)});
+    return std::make_unique<Stmt>(ReturnStmt{keyword, std::move(value)});
 }
 StmtPtr Parser::expression_statement() {
     ExprPtr value = expression();

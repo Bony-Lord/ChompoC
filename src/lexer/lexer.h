@@ -30,6 +30,7 @@ private:
     void number();
     void identifier();
     void string_literal();
+    void char_literal();
     void add_token(TokenType type);
 
     static bool is_support_name(std::string_view);

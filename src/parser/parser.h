@@ -65,6 +65,7 @@ private:
     ExprPtr grouping();
     ExprPtr unary();
     ExprPtr array_literal();
+    ExprPtr array_expression();
 
     // Infix-правила: токен продолжает левое выражение
     ExprPtr binary(ExprPtr left);

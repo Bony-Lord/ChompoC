@@ -30,7 +30,6 @@ namespace {
 
         return value;
     }
-
     std::string parse_string(const Token &token) {
         if (token.lexeme.size() < 2 || token.lexeme.front() != '"' || token.lexeme.back() != '"') {
             throw RuntimeError(token, "invalid string literal");
@@ -88,12 +87,43 @@ namespace {
 
         return value;
     }
-
     Value parse_number(const Token &token) {
         if (token.lexeme.find('.') != std::string::npos)
             return Value(parse_double(token));
 
         return Value(parse_integer(token));
+    }
+    char parse_char(const Token &token) {
+        if (token.lexeme.size() < 3 || token.lexeme.front() != '\'' || token.lexeme.back() != '\'') {
+            throw RuntimeError(token, "invalid character literal");
+        }
+
+        if (token.lexeme[1] != '\\') {
+            if (token.lexeme.size() != 3)
+                throw RuntimeError(token, "character literal must contain exactly one character");
+
+            return token.lexeme[1];
+        }
+
+        if (token.lexeme.size() != 4)
+            throw RuntimeError(token, "invalid character escape sequence");
+
+        switch (token.lexeme[2]) {
+        case 'n':
+            return '\n';
+        case 't':
+            return '\t';
+        case 'r':
+            return '\r';
+        case '0':
+            return '\0';
+        case '\\':
+            return '\\';
+        case '\'':
+            return '\'';
+        default:
+            throw RuntimeError(token, "unknown character escape sequence");
+        }
     }
 
     bool values_equal(const Value &left, const Value &right) {
@@ -152,7 +182,7 @@ namespace {
     }
 
     bool can_convert_to_string_implicitly(const Value &value) {
-        return value.is_null() || value.is_number() || value.is_string();
+        return value.is_null() || value.is_number() || value.is_string() || value.is_char() || value.is_array();
     }
 
     TokenType binary_operator_type(TokenType type) {
@@ -297,7 +327,7 @@ namespace {
     }
 
     Value convert_to_int(const Token &token, const Value &value) {
-        if (value.is_bool() || value.is_integer())
+        if (value.is_integer_number())
             return Value(value.number_as_integer());
 
         if (value.is_double()) {
@@ -339,7 +369,6 @@ namespace {
 
         throw RuntimeError(token, "cannot convert " + value.type_name() + " to integer");
     }
-
     Value convert_to_double(const Token &token, const Value &value) {
         if (value.is_number())
             return Value(value.number_as_double());
@@ -366,19 +395,83 @@ namespace {
 
         throw RuntimeError(token, "cannot convert " + value.type_name() + " to double");
     }
-
     Value convert_to_bool(const Value &value) { return Value(value.is_truthy()); }
-
     Value convert_to_string(const Token &token, const Value &value) {
-        if (value.is_array()) {
-            throw RuntimeError(token, "array to string conversion requires an array of characters");
-        }
-
         if (value.is_callable()) {
             throw RuntimeError(token, "cannot convert function to string");
         }
 
         return Value(value.to_string());
+    }
+    Value convert_to_char(const Token &token, const Value &value) {
+        if (value.is_char())
+            return value;
+
+        if (value.is_string()) {
+            const std::string &string = std::get<std::string>(value.data);
+
+            if (string.size() != 1) {
+                throw RuntimeError(token, "string must contain exactly one byte");
+            }
+
+            return Value(string[0]);
+        }
+
+        if (value.is_integer()) {
+            const std::int64_t number = value.number_as_integer();
+
+            if (number < 0 || number > 255) {
+                throw RuntimeError(token, "integer is outside the char range");
+            }
+
+            return Value(static_cast<char>(static_cast<unsigned char>(number)));
+        }
+
+        throw RuntimeError(token, "cannot convert " + value.type_name() + " to char");
+    }
+    Value convert_to_array(const Token &token, const Value &value) {
+        if (value.is_array())
+            return value;
+
+        if (value.is_string()) {
+            const std::string &string = std::get<std::string>(value.data);
+
+            auto result = std::make_shared<ArrayValue>();
+            result->reserve(string.size());
+
+            for (const char character : string)
+                result->emplace_back(character);
+
+            return Value(std::move(result));
+        }
+
+        throw RuntimeError(token, "cannot convert " + value.type_name() + " to array");
+    }
+    Value convert_char_array_to_string(const Token &token, const Value &value) {
+        if (!value.is_array()) {
+            throw RuntimeError(token, "CATS requires an array, got " + value.type_name());
+        }
+
+        const ArrayPtr &array = std::get<ArrayPtr>(value.data);
+
+        if (!array)
+            return Value("");
+
+        std::string result;
+        result.reserve(array->size());
+
+        for (std::size_t index = 0; index < array->size(); ++index) {
+            const Value &element = (*array)[index];
+
+            if (!element.is_char()) {
+                throw RuntimeError(token, "CATS requires an array of char, but element " + std::to_string(index) +
+                                              " is " + element.type_name());
+            }
+
+            result.push_back(std::get<char>(element.data));
+        }
+
+        return Value(std::move(result));
     }
 
     CallablePtr make_native(std::string name, NativeFunction::Function function) {
@@ -405,6 +498,17 @@ Interpreter::Interpreter(std::ostream &output)
                      })));
     globals_->define("Type", Value(make_native("Type", [](const Token &token, const std::vector<Value> &arguments) {
                          return Value(arguments[0].type_name());
+                     })));
+    globals_->define("Char", Value(make_native("Char", [](const Token &token, const std::vector<Value> &arguments) {
+                         return convert_to_char(token, arguments[0]);
+                     })));
+
+    globals_->define("Array", Value(make_native("Array", [](const Token &token, const std::vector<Value> &arguments) {
+                         return convert_to_array(token, arguments[0]);
+                     })));
+
+    globals_->define("CATS", Value(make_native("CATS", [](const Token &token, const std::vector<Value> &arguments) {
+                         return convert_char_array_to_string(token, arguments[0]);
                      })));
 }
 
@@ -435,6 +539,8 @@ Value Interpreter::evaluate_node(const LiteralExpr &expression) {
         return Value(false);
     case TokenType::Null:
         return Value(nullptr);
+    case TokenType::Char:
+        return Value(parse_char(token));
     default:
         throw RuntimeError(token, "invalid literal");
     }

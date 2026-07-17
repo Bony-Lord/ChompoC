@@ -10,7 +10,7 @@ namespace {
         {"else", TokenType::Else},     {"while", TokenType::While}, {"for", TokenType::For},
         {"return", TokenType::Return}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
         {"fun", TokenType::Fun},       {"true", TokenType::True},   {"false", TokenType::False},
-        {"NULL", TokenType::Null},     {"in", TokenType::In},
+        {"NULL", TokenType::Null},     {"in", TokenType::In},       {"Array", TokenType::Array},
     };
 }
 
@@ -133,6 +133,31 @@ void Lexer::string_literal() {
     }
 
     error("unterminated string literal");
+}
+
+void Lexer::char_literal() {
+    if (is_at_end() || peek() == '\n')
+        error("unterminated character literal");
+
+    if (peek() == '\'')
+        error("character literal cannot be empty");
+
+    if (peek() == '\\') {
+        advance();
+
+        if (is_at_end() || peek() == '\n')
+            error("unfinished character escape sequence");
+
+        advance();
+    } else {
+        advance();
+    }
+
+    if (peek() != '\'')
+        error("character literal must contain exactly one character");
+
+    advance();
+    add_token(TokenType::Char);
 }
 
 void Lexer::scan_token() {
@@ -262,6 +287,9 @@ void Lexer::scan_token() {
             error("expected '|' after '|'");
         else
             add_token(TokenType::OrOr);
+        break;
+    case '\'':
+        char_literal();
         break;
 
     case ' ':
