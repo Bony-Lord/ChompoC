@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 
+class IOManager;
 class UserFunction;
 
 class Interpreter {
@@ -17,6 +18,7 @@ class Interpreter {
 public:
     Interpreter(std::ostream &output, std::ostream &diagnostics = std::cerr);
 
+    void install_io_builtins(IOManager &io_manager);
     void interpret(const Program &program);
 
 private:
