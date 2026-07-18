@@ -37,7 +37,7 @@
 | Встроенные функции | ✅ | преобразования типов, `len`, `CATS`, `Type` |
 | Защита рантайма | ✅ | ограничение глубины вызовов и контролируемый `Runtime StackOverflow` |
 | Автотесты | ✅ | CTest + golden output tests |
-| Циклы | 🚧 | `while`, `for-in`, `break`, `continue` — следующий этап |
+| Циклы | ✅ | `while`, `for-in`, `break`, `continue` — реализован |
 | Ввод-вывод | 📋 | планируется `IOStream` и `readLine(..., timeout?)` |
 | Сеть | 📋 | планируется для чат-приложения LangJam |
 
