@@ -10,6 +10,7 @@
 #include <vector>
 
 class IOManager;
+class NetworkManager;
 class UserFunction;
 
 class Interpreter {
@@ -19,6 +20,7 @@ public:
     Interpreter(std::ostream &output, std::ostream &diagnostics = std::cerr);
 
     void install_io_builtins(IOManager &io_manager);
+    void install_network_builtins(NetworkManager &network_manager);
     void interpret(const Program &program);
 
 private:
@@ -39,7 +41,6 @@ private:
     };
     ResolvedTarget resolve_target(const Expr &expression);
 
-    // Выражения
     Value evaluate_node(const LiteralExpr &expression);
     Value evaluate_node(const VariableExpr &expression);
     Value evaluate_node(const UnaryExpr &expression);
@@ -51,7 +52,6 @@ private:
     Value evaluate_node(const IndexExpr &expression);
     Value evaluate_node(const UpdateExpr &expression);
 
-    // Инструкции
     void execute_node(const EmptyStmt &);
     void execute_node(const ExpressionStmt &statement);
     void execute_node(const VarStmt &statement);
@@ -70,14 +70,13 @@ private:
     class CallDepthGuard {
     public:
         explicit CallDepthGuard(std::size_t &depth) : depth_(depth) { ++depth_; }
-
         ~CallDepthGuard() { --depth_; }
-
         CallDepthGuard(const CallDepthGuard &) = delete;
         CallDepthGuard &operator=(const CallDepthGuard &) = delete;
 
     private:
         std::size_t &depth_;
     };
+
     void warning(const Token &token, const std::string &message);
 };

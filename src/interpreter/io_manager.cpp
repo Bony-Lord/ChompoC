@@ -1,5 +1,6 @@
 #include "io_manager.h"
 
+#include <filesystem>
 #include <ios>
 #include <stdexcept>
 #include <utility>
@@ -59,7 +60,7 @@ void IOManager::set_input(std::string_view path) {
     input_file_ = std::move(new_input);
 }
 
-void IOManager::set_output(std::string_view path, bool clear) {
+void IOManager::set_output(std::string_view path, std::string_view mode) {
     redirected_output_.flush();
     output_buffer_.set_target(standard_output_);
     output_file_.reset();
@@ -68,26 +69,24 @@ void IOManager::set_output(std::string_view path, bool clear) {
     if (is_standard(path))
         return;
 
-    auto new_output = open_output_file(path, clear);
+    auto new_output = open_output_file(path, mode);
     output_buffer_.set_target(*new_output);
     output_file_ = std::move(new_output);
 }
 
-void IOManager::set_streams(std::string_view input_path, std::string_view output_path, bool clear_output) {
+void IOManager::set_streams(std::string_view input_path, std::string_view output_path, std::string_view output_mode) {
     std::unique_ptr<std::ifstream> new_input;
-
     if (!is_standard(input_path))
         new_input = open_input_file(input_path);
+
+    std::unique_ptr<std::ofstream> new_output;
+    if (!is_standard(output_path))
+        new_output = open_output_file(output_path, output_mode);
 
     redirected_output_.flush();
     output_buffer_.set_target(standard_output_);
     output_file_.reset();
     redirected_output_.clear();
-
-    std::unique_ptr<std::ofstream> new_output;
-
-    if (!is_standard(output_path))
-        new_output = open_output_file(output_path, clear_output);
 
     if (new_input) {
         input_ = new_input.get();
@@ -108,19 +107,29 @@ bool IOManager::is_standard(std::string_view path) { return path == StandardPath
 
 std::unique_ptr<std::ifstream> IOManager::open_input_file(std::string_view path) {
     auto file = std::make_unique<std::ifstream>(std::string(path));
-
     if (!*file)
         throw std::runtime_error("failed to open input file '" + std::string(path) + "'");
-
     return file;
 }
 
-std::unique_ptr<std::ofstream> IOManager::open_output_file(std::string_view path, bool clear) {
-    const std::ios::openmode mode = std::ios::out | (clear ? std::ios::trunc : std::ios::app);
-    auto file = std::make_unique<std::ofstream>(std::string(path), mode);
+std::unique_ptr<std::ofstream> IOManager::open_output_file(std::string_view path, std::string_view mode) {
+    std::ios::openmode open_mode = std::ios::out;
 
+    if (mode == RewriteMode) {
+        open_mode |= std::ios::trunc;
+    } else if (mode == AppendMode) {
+        open_mode |= std::ios::app;
+    } else if (mode == CreateMode) {
+        if (std::filesystem::exists(std::filesystem::path(path)))
+            throw std::runtime_error("output file '" + std::string(path) + "' already exists");
+        open_mode |= std::ios::trunc;
+    } else {
+        throw std::runtime_error("unknown output mode '" + std::string(mode) +
+                                 "'; expected 'rewrite', 'append' or 'create'");
+    }
+
+    auto file = std::make_unique<std::ofstream>(std::string(path), open_mode);
     if (!*file)
         throw std::runtime_error("failed to open output file '" + std::string(path) + "'");
-
     return file;
 }
