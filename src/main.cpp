@@ -1,5 +1,6 @@
 #include "config.h"
 #include "interpreter/interpreter.h"
+#include "interpreter/io_manager.h"
 #include "lexer/lexer.h"
 #include "lexer/token.h"
 #include "parser/ast_printer.h"
@@ -79,7 +80,10 @@ int main(int argc, char *argv[]) {
 
             std::cout << "====== Output ======\n";
         }
-        Interpreter interpreter(std::cout);
+
+        IOManager io_manager(std::cin, std::cout);
+        Interpreter interpreter(io_manager.output_stream());
+        interpreter.install_io_builtins(io_manager);
         interpreter.interpret(program);
     } catch (const std::exception &exception) {
         std::cerr << exception.what() << '\n';
