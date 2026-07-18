@@ -109,6 +109,7 @@ const Parser::ParseRule &Parser::get_rule(TokenType type) {
         result[token_index(TokenType::AndAnd)] = {nullptr, &Parser::binary, Precedence::And};
         result[token_index(TokenType::OrOr)] = {nullptr, &Parser::binary, Precedence::Or};
         result[token_index(TokenType::Equal)] = {nullptr, &Parser::assignment, Precedence::Assignment};
+        result[token_index(TokenType::In)] = {nullptr, &Parser::binary, Precedence::Comparison};
 
         return result;
     }();
@@ -311,116 +312,116 @@ StmtPtr Parser::function_declaration() {
     return std::make_unique<Stmt>(FunctionStmt{name, std::move(parameters), std::move(body)});
 }
 
-    StmtPtr Parser::statement() {
-        if (match({TokenType::Semicolon}))
-            return std::make_unique<Stmt>(EmptyStmt{});
-        if (match({TokenType::Print}))
-            return print_statement();
-        if (match({TokenType::LeftBrace}))
-            return block_statement();
-        if (match({TokenType::If}))
-            return if_statement();
-        if (match({TokenType::While}))
-            return while_statement();
-        if (match({TokenType::Continue}))
-            return continue_statement();
-        if (match({TokenType::Break}))
-            return break_statement();
-        if (match({TokenType::Return}))
-            return return_statement();
-        return expression_statement();
+StmtPtr Parser::statement() {
+    if (match({TokenType::Semicolon}))
+        return std::make_unique<Stmt>(EmptyStmt{});
+    if (match({TokenType::Print}))
+        return print_statement();
+    if (match({TokenType::LeftBrace}))
+        return block_statement();
+    if (match({TokenType::If}))
+        return if_statement();
+    if (match({TokenType::While}))
+        return while_statement();
+    if (match({TokenType::Continue}))
+        return continue_statement();
+    if (match({TokenType::Break}))
+        return break_statement();
+    if (match({TokenType::Return}))
+        return return_statement();
+    return expression_statement();
+}
+
+StmtPtr Parser::print_statement() {
+    consume(TokenType::LeftParen, "expected '(' after 'print'");
+
+    std::vector<ExprPtr> arguments;
+
+    if (!check(TokenType::RightParen)) {
+        do {
+            arguments.push_back(expression());
+        } while (match({TokenType::Comma}));
+    }
+    consume(TokenType::RightParen, "expected ')' after print arguments");
+
+    consume(TokenType::Semicolon, "expected ';' after print statement");
+
+    return std::make_unique<Stmt>(PrintStmt{std::move(arguments)});
+}
+StmtPtr Parser::return_statement() {
+    const Token keyword = previous();
+
+    if (function_depth_ == 0)
+        error(keyword, "cannot return from top-level code");
+
+    ExprPtr value;
+
+    if (!check(TokenType::Semicolon))
+        value = expression();
+
+    consume(TokenType::Semicolon, "expected ';' after return value");
+
+    return std::make_unique<Stmt>(ReturnStmt{keyword, std::move(value)});
+}
+StmtPtr Parser::expression_statement() {
+    ExprPtr value = expression();
+
+    consume(TokenType::Semicolon, "expected ';' after expression");
+
+    return std::make_unique<Stmt>(ExpressionStmt{std::move(value)});
+}
+StmtPtr Parser::block_statement() { return std::make_unique<Stmt>(BlockStmt{block()}); }
+std::vector<StmtPtr> Parser::block() {
+    std::vector<StmtPtr> statements;
+
+    while (!check(TokenType::RightBrace) && !is_at_end()) {
+        statements.push_back(declaration());
     }
 
-    StmtPtr Parser::print_statement() {
-        consume(TokenType::LeftParen, "expected '(' after 'print'");
-
-        std::vector<ExprPtr> arguments;
-
-        if (!check(TokenType::RightParen)) {
-            do {
-                arguments.push_back(expression());
-            } while (match({TokenType::Comma}));
-        }
-        consume(TokenType::RightParen, "expected ')' after print arguments");
-
-        consume(TokenType::Semicolon, "expected ';' after print statement");
-
-        return std::make_unique<Stmt>(PrintStmt{std::move(arguments)});
-    }
-    StmtPtr Parser::return_statement() {
-        const Token keyword = previous();
-
-        if (function_depth_ == 0)
-            error(keyword, "cannot return from top-level code");
-
-        ExprPtr value;
-
-        if (!check(TokenType::Semicolon))
-            value = expression();
-
-        consume(TokenType::Semicolon, "expected ';' after return value");
-
-        return std::make_unique<Stmt>(ReturnStmt{keyword, std::move(value)});
-    }
-    StmtPtr Parser::expression_statement() {
-        ExprPtr value = expression();
-
-        consume(TokenType::Semicolon, "expected ';' after expression");
-
-        return std::make_unique<Stmt>(ExpressionStmt{std::move(value)});
-    }
-    StmtPtr Parser::block_statement() { return std::make_unique<Stmt>(BlockStmt{block()}); }
-    std::vector<StmtPtr> Parser::block() {
-        std::vector<StmtPtr> statements;
-
-        while (!check(TokenType::RightBrace) && !is_at_end()) {
-            statements.push_back(declaration());
-        }
-
-        consume(TokenType::RightBrace, "expected '}' after block");
-        return statements;
-    }
-    StmtPtr Parser::if_statement() {
-        consume(TokenType::LeftParen, "expected '(' after 'if'");
-        ExprPtr condition = expression();
-        consume(TokenType::RightParen, "expected ')' after condition");
-        StmtPtr then_branch = statement();
-        StmtPtr else_branch;
-        if (match({TokenType::Else}))
-            else_branch = statement();
-        return std::make_unique<Stmt>(IfStmt(std::move(condition), std::move(then_branch), std::move(else_branch)));
-    }
-    StmtPtr Parser::while_statement() {
-        const Token keyword = previous();
-        consume(TokenType::LeftParen, "expected '(' after 'while'");
-        ExprPtr condition = expression();
-        consume(TokenType::RightParen, "expected ')' after while condition");
-        ++loop_depth_;
-        StmtPtr body;
-        try {
-            body = statement();
-        } catch (...) {
-            --loop_depth_;
-            throw;
-        }
+    consume(TokenType::RightBrace, "expected '}' after block");
+    return statements;
+}
+StmtPtr Parser::if_statement() {
+    consume(TokenType::LeftParen, "expected '(' after 'if'");
+    ExprPtr condition = expression();
+    consume(TokenType::RightParen, "expected ')' after condition");
+    StmtPtr then_branch = statement();
+    StmtPtr else_branch;
+    if (match({TokenType::Else}))
+        else_branch = statement();
+    return std::make_unique<Stmt>(IfStmt(std::move(condition), std::move(then_branch), std::move(else_branch)));
+}
+StmtPtr Parser::while_statement() {
+    const Token keyword = previous();
+    consume(TokenType::LeftParen, "expected '(' after 'while'");
+    ExprPtr condition = expression();
+    consume(TokenType::RightParen, "expected ')' after while condition");
+    ++loop_depth_;
+    StmtPtr body;
+    try {
+        body = statement();
+    } catch (...) {
         --loop_depth_;
-        return std::make_unique<Stmt>(WhileStmt{keyword, std::move(condition), std::move(body)});
+        throw;
     }
-    StmtPtr Parser::break_statement() {
-        const Token keyword = previous();
-        if (loop_depth_ == 0) {
-            error(keyword, "'break' can only be used inside a loop");
-        }
-        consume(TokenType::Semicolon, "expected ';' after 'break'");
+    --loop_depth_;
+    return std::make_unique<Stmt>(WhileStmt{keyword, std::move(condition), std::move(body)});
+}
+StmtPtr Parser::break_statement() {
+    const Token keyword = previous();
+    if (loop_depth_ == 0) {
+        error(keyword, "'break' can only be used inside a loop");
+    }
+    consume(TokenType::Semicolon, "expected ';' after 'break'");
 
-        return std::make_unique<Stmt>(BreakStmt{keyword});
+    return std::make_unique<Stmt>(BreakStmt{keyword});
+}
+StmtPtr Parser::continue_statement() {
+    const Token keyword = previous();
+    if (loop_depth_ == 0) {
+        error(keyword, "'continue' can only be used inside a loop");
     }
-    StmtPtr Parser::continue_statement() {
-        const Token keyword = previous();
-        if (loop_depth_ == 0) {
-            error(keyword, "'continue' can only be used inside a loop");
-        }
-        consume(TokenType::Semicolon, "expected ';' after 'continue'");
+    consume(TokenType::Semicolon, "expected ';' after 'continue'");
 
-        return std::make_unique<Stmt>(ContinueStmt{keyword});
-    }
+    return std::make_unique<Stmt>(ContinueStmt{keyword});
+}

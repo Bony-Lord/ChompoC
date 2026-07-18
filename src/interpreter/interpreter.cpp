@@ -19,6 +19,7 @@
 #include <variant>
 
 namespace {
+
     std::int64_t parse_integer(const Token &token) {
         std::int64_t value = 0;
 
@@ -170,6 +171,43 @@ namespace {
         }
         return false;
     }
+    Value evaluate_membership(const Token &operation, const Value &needle, const Value &container) {
+        if (container.is_array()) {
+            const ArrayPtr &array = std::get<ArrayPtr>(container.data);
+
+            if (!array)
+                return Value(false);
+
+            for (const Value &element : *array) {
+                if (values_equal(needle, element))
+                    return Value(true);
+            }
+
+            return Value(false);
+        }
+
+        if (container.is_string()) {
+            const std::string &string = std::get<std::string>(container.data);
+
+            if (needle.is_char()) {
+                const char character = std::get<char>(needle.data);
+
+                return Value(string.find(character) != std::string::npos);
+            }
+
+            if (needle.is_string()) {
+                const std::string &substring = std::get<std::string>(needle.data);
+
+                return Value(string.find(substring) != std::string::npos);
+            }
+
+            throw RuntimeError(operation, "left operand of 'in' must be char or string "
+                                          "when right operand is string, got " +
+                                              needle.type_name());
+        }
+
+        throw RuntimeError(operation, "right operand of 'in' must be array or string, got " + container.type_name());
+    }
 
     Value concatenate_arrays(const ArrayPtr &left, const ArrayPtr &right) {
         auto result = std::make_shared<ArrayValue>();
@@ -267,6 +305,9 @@ namespace {
     Value apply_binary(const Token &operation, const Value &left, const Value &right) {
         const TokenType type = binary_operator_type(operation.type);
 
+        if (operation.type == TokenType::In) {
+            return evaluate_membership(operation, left, right);
+        }
         if (type == TokenType::EqualEqual)
             return Value(values_equal(left, right));
 
