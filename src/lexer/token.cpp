@@ -22,12 +22,10 @@ std::string_view token_type_name(TokenType type) {
         return "Dot";
     case TokenType::Colon:
         return "Colon";
-
     case TokenType::PlusOne:
         return "PlusOne";
     case TokenType::MinusOne:
         return "MinusOne";
-
     case TokenType::PlusEq:
         return "PlusEq";
     case TokenType::MinusEq:
@@ -36,7 +34,6 @@ std::string_view token_type_name(TokenType type) {
         return "MulEq";
     case TokenType::DivideEq:
         return "DivideEq";
-
     case TokenType::Plus:
         return "Plus";
     case TokenType::Minus:
@@ -47,7 +44,6 @@ std::string_view token_type_name(TokenType type) {
         return "Slash";
     case TokenType::Percent:
         return "Percent";
-
     case TokenType::Equal:
         return "Equal";
     case TokenType::EqualEqual:
@@ -68,7 +64,6 @@ std::string_view token_type_name(TokenType type) {
         return "AndAnd";
     case TokenType::OrOr:
         return "OrOr";
-
     case TokenType::Identifier:
         return "Identifier";
     case TokenType::Number:
@@ -77,19 +72,18 @@ std::string_view token_type_name(TokenType type) {
         return "String";
     case TokenType::Char:
         return "Char";
-
     case TokenType::Var:
         return "Var";
     case TokenType::Print:
         return "Print";
     case TokenType::EndOfFile:
         return "EndOfFile";
-    case TokenType::Return:
-        return "Return";
-    case TokenType::Continue:
-        return "Continue";
-    case TokenType::Break:
-        return "Break";
+    case TokenType::True:
+        return "True";
+    case TokenType::False:
+        return "False";
+    case TokenType::Null:
+        return "Null";
     case TokenType::If:
         return "If";
     case TokenType::Else:
@@ -98,20 +92,20 @@ std::string_view token_type_name(TokenType type) {
         return "While";
     case TokenType::For:
         return "For";
-    case TokenType::True:
-        return "True";
-    case TokenType::False:
-        return "False";
-    case TokenType::Null:
-        return "Null";
-    case TokenType::Fun:
-        return "Fun";
-    case TokenType::Class:
-        return "Class";
     case TokenType::In:
         return "In";
+    case TokenType::Break:
+        return "Break";
+    case TokenType::Continue:
+        return "Continue";
+    case TokenType::Fun:
+        return "Fun";
+    case TokenType::Return:
+        return "Return";
     case TokenType::Array:
         return "Array";
+    case TokenType::Class:
+        return "Class";
     case TokenType::Count:
         return "Count";
     }

@@ -2,21 +2,21 @@
 
 # Chompo
 
-### Динамический язык и tree-walk интерпретатор на C++23
+### Динамический язык и расширяемый tree-walk интерпретатор на C++23
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/23)
-[![CMake](https://img.shields.io/badge/CMake-4.2%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+[![CMake](https://img.shields.io/badge/CMake-4.2%2B-064F8C?logo=cmake)](https://cmake.org/)
 [![CI](https://github.com/Bony-Lord/ChompoC/actions/workflows/ci.yml/badge.svg)](https://github.com/Bony-Lord/ChompoC/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
 
-**Chompo** — динамически типизированный язык с функциями первого класса, замыканиями, изменяемыми массивами и строками, файловым I/O и TCP API.
+**Chompo** поддерживает функции первого класса, closures, изменяемые массивы, файловый I/O и неблокирующий TCP API.
 
-[Wiki](docs/wiki/Home.md) · [Синтаксис](docs/wiki/Language-Syntax.md) · [Все встроенные функции](docs/wiki/Built-in-Functions.md) · [Network API](docs/wiki/Network-API.md) · [Performance](docs/wiki/Runtime-and-Performance.md)
+[Wiki](docs/wiki/Home.md) · [Синтаксис](docs/wiki/Language-Syntax.md) · [Built-ins](docs/wiki/Built-in-Functions.md) · [Network API](docs/wiki/Network-API.md) · [Runtime](docs/wiki/Runtime-Architecture.md)
 
 </div>
 
 > [!IMPORTANT]
-> Рабочая ветка проекта — `dev`. Feature-ветка `feature/perf-wiki-push-pop` содержит Wiki, `push/pop`, TLE-checker и оптимизированный runtime. Собственная VM для LangJam не требуется.
+> Ветка `feature/slot-runtime` содержит изолированную оптимизацию runtime. Базовая `feature/perf-wiki-push-pop` остаётся отдельным стабильным слоем с Wiki, `push/pop` и performance checker.
 
 ## Возможности
 
@@ -28,7 +28,8 @@
 | Коллекции | индексация, мутация, `len`, `in`, `push`, `pop`, конкатенация, повторение |
 | I/O | `input`, `istream`, `ostream`, `iostream` |
 | TCP | `netListen`, `netConnect`, `netAccept`, `netPoll`, `netSend`, receive API, close |
-| Проверки | CTest, Windows/Linux CI, Release execution-only TLE suite |
+| Runtime | resolver, `SymbolId`, плотные local slots, расширяемый global/native registry |
+| Проверки | CTest, Windows/Linux CI, execution-only Release TLE suite |
 
 ## Сборка
 
@@ -60,99 +61,68 @@ Windows с multi-config генератором:
 ## Пример
 
 ```javascript
-fun sum(values) {
-    var result = 0;
+fun makeCounter(start) {
+    var value = start;
 
-    for (var value in values)
-        result += value;
+    fun next() {
+        value++;
+        return value;
+    }
 
-    return result;
+    return next;
 }
 
-var values = Array{};
-push(values, 10, 20, 30);
-
-print(sum(values), "\n"); // 60
-print(pop(values), "\n"); // 30
+var counter = makeCounter(10);
+print(counter(), " ", counter(), "\n"); // 11 12
 ```
+
+## Быстрый и расширяемый runtime
+
+После Parser запускается отдельный Resolver:
+
+```text
+source -> Lexer -> Parser -> Resolver -> Interpreter
+```
+
+Resolver один раз превращает локальное имя в адрес `(depth, slot)`. Во время выполнения локальные переменные и параметры читаются из плотного `vector<Value>` без хеширования строки и без поиска имени по цепочке scope.
+
+Глобальные и native-значения остаются в реестре по `SymbolId`. Поэтому новые built-in модули по-прежнему подключаются независимо:
+
+```cpp
+interpreter.install_collection_builtins();
+interpreter.install_io_builtins(io_manager);
+interpreter.install_network_builtins(network_manager);
+```
+
+Resolver не знает о конкретных built-ins, I/O или сети. Это сохраняет путь к модулям, plugin API, классам, REPL и будущему bytecode backend.
+
+Подробнее: [`docs/wiki/Runtime-Architecture.md`](docs/wiki/Runtime-Architecture.md).
 
 ## `push` и `pop`
 
 ```javascript
 var values = Array{};
-
-push(values, 10);
-push(values, 20, 30);
-
-print(values, "\n"); // {10, 20, 30}
+push(values, 10, 20, 30);
 print(pop(values), "\n"); // 30
 ```
 
 `push(array, values...)` мутирует массив и возвращает новую длину. `pop(array)` удаляет последний элемент; пустой массив возвращает `NULL`.
 
-## Оптимизированный runtime
-
-Текущая feature-ветка ускоряет hot paths без VM:
-
-- имена интернируются в числовые `SymbolId`;
-- Environment работает по `uint32_t` вместо повторного хеширования строк;
-- глубина lookup кешируется внутри scope;
-- завершённые function frames переиспользуются, если не удерживаются closure;
-- lexer использует `string_view` для keywords и заранее резервирует tokens;
-- Release использует IPO/LTO при поддержке компилятором;
-- исходный файл читается одним выделением памяти.
-
-Семантика closures сохраняется: захваченный frame никогда не возвращается в пул.
-
 ## Execution-only TLE checker
 
-CI не включает configure, компиляцию и линковку в TLE:
-
-1. job `performance-build` отдельно собирает Release-бинарник и загружает его как artifact;
-2. job `performance-execution` скачивает уже готовый бинарник;
-3. Python-checker замеряет только время процесса `Chompo <case>.chmp`.
-
-Локальный запуск после уже выполненной Release-сборки:
-
 ```bash
-python tests/performance/run_performance_suite.py \
-  --executable build-release/Chompo \
-  --cases tests/performance/cases
+cmake -S . -B build-perf -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCHOMPO_ENABLE_PERFORMANCE_TESTS=ON
+cmake --build build-perf --parallel
+ctest --test-dir build-perf -L performance --output-on-failure
 ```
 
-На Windows:
-
-```powershell
-python tests/performance/run_performance_suite.py `
-  --executable build-release/Chompo.exe `
-  --cases tests/performance/cases
-```
-
-Checker запускает тяжёлые программы для:
-
-- арифметики и циклов;
-- пользовательских функций;
-- массовых `push/pop`;
-- lookup через глубокую цепочку scope.
-
-Для каждого сценария проверяется время исполнения и checksum. Установка CMake, сборка C++, artifact upload/download и запуск Python не входят в индивидуальный TLE.
-
-## Документация
-
-Полная документация находится в [`docs/wiki`](docs/wiki/Home.md):
-
-- синтаксис и приоритет операторов;
-- типы и преобразования;
-- функции и closures;
-- массивы и строки;
-- все встроенные функции;
-- I/O и файловые режимы;
-- полный Network API;
-- runtime, ошибки и performance suite.
+В CI Release-бинарник собирается отдельно. Индивидуальные TLE-лимиты включают только запуск интерпретатора на `.chmp`, а не CMake и C++-компиляцию.
 
 ## LangJam
 
-Chompo уже является интерпретатором на C++, поэтому отдельная VM не обязательна. Для сдачи остаётся написать многопользовательский чат на самом Chompo, добавить историю последних сообщений и инструкцию запуска.
+Chompo уже является полноценным интерпретатором на C++. Отдельная VM для допуска не требуется. Следующий продуктовый этап — сервер и клиент многопользовательского чата на самом Chompo.
 
 ## Лицензия
 

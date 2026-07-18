@@ -1,69 +1,56 @@
 # Runtime и производительность
 
-Chompo остаётся tree-walk интерпретатором, но runtime оптимизирован для частых операций.
+Chompo остаётся расширяемым tree-walk интерпретатором, но горячие пути не обязаны использовать медленный динамический lookup.
 
 ## Реализованные оптимизации
 
-- идентификаторы интернируются lexer-ом в числовые `SymbolId`;
-- Environment ищет переменные по `uint32_t`, а не повторно хеширует строки;
-- глубина найденной переменной кешируется внутри активного scope;
-- пользовательские функции переиспользуют завершённые call frames;
-- frame не переиспользуется, когда удерживается closure, поэтому семантика замыканий сохраняется;
+- identifier интернируются lexer-ом в `SymbolId`;
+- Resolver один раз вычисляет `Global` или `Local(depth, slot)`;
+- локальные переменные и параметры хранятся в плотных slots;
+- глобальные и native-значения остаются в расширяемом реестре;
+- function frames переиспользуются, если их не удерживает closure;
 - lexer заранее резервирует память под tokens;
 - keyword lookup выполняется через `string_view`;
-- Release включает IPO/LTO, когда компилятор его поддерживает;
-- `push` использует `reserve`, `pop` перемещает последний элемент.
+- Release включает IPO/LTO, когда toolchain это поддерживает;
+- `push` использует `reserve`, `pop` перемещает последний элемент;
+- исходный файл читается одним выделением памяти.
 
-## Execution-only Performance/TLE suite
+Подробнее: [Архитектура runtime](Runtime-Architecture).
 
-TLE относится только к исполнению программ Chompo. Configure, C++-компиляция и линковка измеряться не должны.
+## Почему slots быстрее
 
-В GitHub Actions проверка разделена на два job:
+Map-based lookup требует хеширования имени и часто прохода по цепочке scope. Resolver переносит эту работу из каждой итерации программы в однократную фазу до исполнения.
 
-1. `performance-build` собирает Release-бинарник `Chompo` и загружает его как artifact;
-2. `performance-execution` скачивает готовый бинарник и запускает checker без CMake и компилятора.
-
-Таймер Python-checker запускается непосредственно перед:
+Во время исполнения локальная ссылка содержит готовый адрес:
 
 ```text
-Chompo case.chmp
+(depth, slot)
 ```
 
-и останавливается сразу после завершения этого процесса. В индивидуальный лимит не входят:
+Глобальный реестр не удалён: он нужен для встроенных модулей, динамического host API и будущих импортов.
 
-- установка инструментов;
-- CMake configure;
-- C++ compilation;
-- linking;
-- artifact upload/download;
-- запуск самого Python-интерпретатора до benchmark case.
+## Performance/TLE suite
 
-## Локальный запуск
-
-Сначала один раз собрать Release:
+Локальный запуск:
 
 ```bash
-cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build-release --parallel --target Chompo
+cmake -S . -B build-perf -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCHOMPO_ENABLE_PERFORMANCE_TESTS=ON
+cmake --build build-perf --parallel
+ctest --test-dir build-perf -L performance --output-on-failure
 ```
 
-После этого запускать только исполнение:
+Набор проверяет:
 
-```bash
-python tests/performance/run_performance_suite.py \
-  --executable build-release/Chompo \
-  --cases tests/performance/cases
-```
+- арифметику и циклы;
+- пользовательские функции;
+- массовые `push/pop`;
+- lookup через глубокие scope.
 
-Windows:
+Каждый сценарий проверяет checksum и индивидуальный лимит выполнения.
 
-```powershell
-python tests/performance/run_performance_suite.py `
-  --executable build-release/Chompo.exe `
-  --cases tests/performance/cases
-```
-
-Набор проверяет арифметику, вызовы функций, массивы и lookup через глубокие scope. Каждый сценарий одновременно проверяет checksum и индивидуальное ограничение времени.
+В GitHub Actions компиляция вынесена в отдельный job. `execution-only TLE` скачивает уже собранный Release-бинарник и измеряет только запуск Chompo на тяжёлых `.chmp`.
 
 ## Ограничения runtime
 

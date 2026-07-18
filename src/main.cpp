@@ -6,6 +6,7 @@
 #include "lexer/token.h"
 #include "parser/ast_printer.h"
 #include "parser/parser.h"
+#include "parser/resolver.h"
 
 #include <exception>
 #include <filesystem>
@@ -77,9 +78,12 @@ int main(int argc, char *argv[]) {
         Parser parser(std::move(tokens));
         Program program = parser.parse();
 
+        Resolver resolver;
+        resolver.resolve(program);
+
         if constexpr (ChompoConfig::EnableDebugOutput) {
             std::cout << "====== Parser ======\n";
-            std::cout << "Parsed " << program.size() << " top-level statements\n";
+            std::cout << "Parsed and resolved " << program.size() << " top-level statements\n";
             AstPrinter printer;
             std::cout << printer.print(program);
             std::cout << "====== Output ======\n";

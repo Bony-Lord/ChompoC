@@ -57,6 +57,10 @@ jobs:
 
   performance-build:
     name: ubuntu-latest / build Release benchmark binary
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/feature/slot-runtime' ||
+      (github.event_name == 'pull_request' && github.base_ref == 'feature/perf-wiki-push-pop')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

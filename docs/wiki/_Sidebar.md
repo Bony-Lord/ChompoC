@@ -9,4 +9,5 @@
 - [Встроенные функции](Built-in-Functions)
 - [I/O](Input-and-Output)
 - [Network API](Network-API)
+- [Архитектура runtime](Runtime-Architecture)
 - [Runtime и скорость](Runtime-and-Performance)

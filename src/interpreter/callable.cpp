@@ -34,14 +34,15 @@ UserFunction::UserFunction(const FunctionStmt &declaration, std::shared_ptr<Envi
 }
 
 Value UserFunction::call(Interpreter &interpreter, const Token &, const std::vector<Value> &arguments) const {
+    const std::size_t frame_slots = declaration_->name.scope_slots;
     std::shared_ptr<Environment> environment;
 
     if (frame_pool_.empty()) {
-        environment = std::make_shared<Environment>(closure_, declaration_->parameters.size());
+        environment = std::make_shared<Environment>(closure_, frame_slots);
     } else {
         environment = std::move(frame_pool_.back());
         frame_pool_.pop_back();
-        environment->reset(closure_, declaration_->parameters.size());
+        environment->reset(closure_, frame_slots);
     }
 
     for (std::size_t index = 0; index < declaration_->parameters.size(); ++index)
