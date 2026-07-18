@@ -104,31 +104,44 @@ std::string Value::to_string() const {
         return *string;
 
     if (const auto *array = std::get_if<ArrayPtr>(&data)) {
-        if (!*array) {
+        if (!*array)
             return "{}";
-        }
 
-        std::string result = "{";
-        for (std::size_t index = 0; index < (*array)->size(); ++index) {
-            if (index > 0) {
+        const std::size_t element_count = (*array)->size();
+
+        std::string result;
+        if (element_count <= (result.max_size() - 2) / 3)
+            result.reserve(2 + element_count * 3);
+
+        result += '{';
+
+        for (std::size_t index = 0; index < element_count; ++index) {
+            if (index > 0)
                 result += ", ";
-            }
+
             result += (**array)[index].to_string();
         }
-        result += "}";
+
+        result += '}';
         return result;
     }
+
     if (const auto *doubler = std::get_if<double>(&data)) {
         std::ostringstream output;
         output << std::setprecision(15) << *doubler;
         return output.str();
     }
+
     if (const auto *callable = std::get_if<CallablePtr>(&data)) {
         if (!*callable)
             return "<function>";
 
-        return "<function " + (*callable)->name() + ">";
+        std::string result = "<function ";
+        result += (*callable)->name();
+        result += '>';
+        return result;
     }
+
     if (const auto *character = std::get_if<char>(&data))
         return std::string(1, *character);
 

@@ -31,6 +31,7 @@ add_executable(Chompo
         src/interpreter/callable.cpp
         src/interpreter/return_signal.h
         src/config.h
+        src/interpreter/loop_signal.h
 )
 
 target_include_directories(Chompo PRIVATE src)
@@ -51,6 +52,8 @@ function(add_chompo_test
             -DUSE_STDERR=${use_stderr}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_case.cmake
     )
+
+    set_tests_properties(${name} PROPERTIES TIMEOUT 5)
 endfunction()
 
 add_chompo_test(basic 0 FALSE)
@@ -60,3 +63,22 @@ add_chompo_test(updates 0 FALSE)
 add_chompo_test(stack_overflow 1 TRUE)
 add_chompo_test(direct_array_cycle 1 TRUE)
 add_chompo_test(indirect_array_cycle 1 TRUE)
+add_chompo_test(loops 0 FALSE)
+add_chompo_test(break_outside_loop 1 TRUE)
+add_chompo_test(break_inside_nested_function 1 TRUE)
+add_chompo_test(membership 0 FALSE)
+add_chompo_test(in_invalid_container 1 TRUE)
+add_chompo_test(in_invalid_string_needle 1 TRUE)
+add_chompo_test(continue_outside_loop 1 TRUE)
+add_chompo_test(for_in 0 FALSE)
+add_chompo_test(regression 0 FALSE)
+
+add_test(
+        NAME error_regressions
+        COMMAND ${CMAKE_COMMAND}
+        -DCHOMPO_EXECUTABLE=$<TARGET_FILE:Chompo>
+        -DTEST_TEMP_DIR=${CMAKE_CURRENT_BINARY_DIR}/Testing/Temporary/chompo-error-tests
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_error_suite.cmake
+)
+
+set_tests_properties(error_regressions PROPERTIES TIMEOUT 10)

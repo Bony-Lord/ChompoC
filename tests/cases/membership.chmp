@@ -1,0 +1,27 @@
+var numbers = Array{1, 2, 3};
+var nested = Array{
+    Array{1, 2},
+    Array{3, 4}
+};
+
+print(1 in numbers, "\n");
+print(4 in numbers, "\n");
+
+print(true in numbers, "\n");
+print('A' in Array{65, 66}, "\n");
+
+print(Array{1, 2} in nested, "\n");
+print(Array{2, 1} in nested, "\n");
+
+print('a' in "chat", "\n");
+print('z' in "chat", "\n");
+
+print("hat" in "chat", "\n");
+print("cat" in "chat", "\n");
+print("" in "chat", "\n");
+
+print(2 in numbers == true, "\n");
+
+if ("om" in "Chompo") {
+    print("true\n");
+}

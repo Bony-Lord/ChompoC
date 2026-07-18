@@ -42,6 +42,7 @@ private:
     std::vector<Token> tokens_;
     std::size_t current_ = 0;
     std::size_t function_depth_ = 0;
+    std::size_t loop_depth_ = 0;
 
     StmtPtr declaration();
     StmtPtr var_declaration();
@@ -53,6 +54,10 @@ private:
     StmtPtr block_statement();
     StmtPtr if_statement();
     StmtPtr return_statement();
+    StmtPtr while_statement();
+    StmtPtr break_statement();
+    StmtPtr continue_statement();
+    StmtPtr for_in_statement();
 
     std::vector<StmtPtr> block();
 

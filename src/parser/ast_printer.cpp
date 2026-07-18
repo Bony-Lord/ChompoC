@@ -124,6 +124,17 @@ std::string AstPrinter::print_node(const IfStmt &statement) const {
     result += ")";
     return result;
 }
+std::string AstPrinter::print_node(const WhileStmt &statement) const {
+    std::string result = "(while ";
+    result += print(*statement.condition);
+    result += " ";
+    result += print(*statement.body);
+    result += ")";
+
+    return result;
+}
+std::string AstPrinter::print_node(const BreakStmt &) const { return "(break)"; }
+std::string AstPrinter::print_node(const ContinueStmt &) const { return "(continue)"; }
 std::string AstPrinter::print_node(const FunctionStmt &statement) const {
     std::string result = "(fun ";
     result += statement.name.lexeme;
@@ -151,6 +162,17 @@ std::string AstPrinter::print_node(const ReturnStmt &statement) const {
         return "(return)";
 
     return parenthesize("return", {statement.value.get()});
+}
+std::string AstPrinter::print_node(const ForInStmt &statement) const {
+    std::string result = "(for-in ";
+    result += statement.variable.lexeme;
+    result += " ";
+    result += print(*statement.iterable);
+    result += " ";
+    result += print(*statement.body);
+    result += ")";
+
+    return result;
 }
 
 std::string AstPrinter::parenthesize(std::string_view name, std::initializer_list<const Expr *> expressions) const {

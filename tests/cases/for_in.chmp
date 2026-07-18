@@ -1,0 +1,42 @@
+for (var value in Array{1, 2, 3}) {
+    print(value, "\n");
+}
+
+for (var character in "abc") {
+    print(character, "\n");
+}
+
+for (var value in Array{1, 2, 3, 4, 5}) {
+    if (value == 2)
+        continue;
+
+    if (value == 5)
+        break;
+
+    print("value:", value, "\n");
+}
+
+var source = Array{10, 20, 30};
+var index = 0;
+
+for (var value in source) {
+    if (index == 0)
+        source[1] = 999;
+
+    print("snapshot:", value, "\n");
+    index++;
+}
+
+var functions = Array{};
+
+for (var value in Array{4, 5, 6}) {
+    fun get() {
+        return value;
+    }
+
+    functions += Array{get};
+}
+
+print(functions[0](), "\n");
+print(functions[1](), "\n");
+print(functions[2](), "\n");

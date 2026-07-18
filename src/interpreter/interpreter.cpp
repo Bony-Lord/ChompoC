@@ -1,6 +1,7 @@
 #include "interpreter.h"
 #include "callable.h"
 #include "config.h"
+#include "loop_signal.h"
 #include "return_signal.h"
 #include "runtime_error.h"
 
@@ -18,6 +19,7 @@
 #include <variant>
 
 namespace {
+
     std::int64_t parse_integer(const Token &token) {
         std::int64_t value = 0;
 
@@ -169,6 +171,43 @@ namespace {
         }
         return false;
     }
+    Value evaluate_membership(const Token &operation, const Value &needle, const Value &container) {
+        if (container.is_array()) {
+            const ArrayPtr &array = std::get<ArrayPtr>(container.data);
+
+            if (!array)
+                return Value(false);
+
+            for (const Value &element : *array) {
+                if (values_equal(needle, element))
+                    return Value(true);
+            }
+
+            return Value(false);
+        }
+
+        if (container.is_string()) {
+            const std::string &string = std::get<std::string>(container.data);
+
+            if (needle.is_char()) {
+                const char character = std::get<char>(needle.data);
+
+                return Value(string.find(character) != std::string::npos);
+            }
+
+            if (needle.is_string()) {
+                const std::string &substring = std::get<std::string>(needle.data);
+
+                return Value(string.find(substring) != std::string::npos);
+            }
+
+            throw RuntimeError(operation, "left operand of 'in' must be char or string "
+                                          "when right operand is string, got " +
+                                              needle.type_name());
+        }
+
+        throw RuntimeError(operation, "right operand of 'in' must be array or string, got " + container.type_name());
+    }
 
     Value concatenate_arrays(const ArrayPtr &left, const ArrayPtr &right) {
         auto result = std::make_shared<ArrayValue>();
@@ -266,6 +305,9 @@ namespace {
     Value apply_binary(const Token &operation, const Value &left, const Value &right) {
         const TokenType type = binary_operator_type(operation.type);
 
+        if (operation.type == TokenType::In) {
+            return evaluate_membership(operation, left, right);
+        }
         if (type == TokenType::EqualEqual)
             return Value(values_equal(left, right));
 
@@ -896,6 +938,19 @@ void Interpreter::execute_node(const IfStmt &statement) {
     if (statement.else_branch)
         execute(*statement.else_branch);
 }
+void Interpreter::execute_node(const WhileStmt &statement) {
+    while (evaluate(*statement.condition).is_truthy()) {
+        try {
+            execute(*statement.body);
+        } catch (const ContinueSignal &) {
+            continue;
+        } catch (const BreakSignal &) {
+            break;
+        }
+    }
+}
+void Interpreter::execute_node(const BreakStmt &) { throw BreakSignal{}; }
+void Interpreter::execute_node(const ContinueStmt &) { throw ContinueSignal{}; }
 void Interpreter::execute_node(const FunctionStmt &statement) {
     CallablePtr function = std::make_shared<UserFunction>(statement, environment_);
 
@@ -923,6 +978,44 @@ void Interpreter::execute_block(const std::vector<StmtPtr> &statements, std::sha
     }
     environment_ = previous;
 }
+void Interpreter::execute_node(const ForInStmt &statement) {
+    const Value iterable = evaluate(*statement.iterable);
+
+    std::vector<Value> snapshot;
+
+    if (iterable.is_array()) {
+        const ArrayPtr &array = std::get<ArrayPtr>(iterable.data);
+
+        if (array)
+            snapshot = *array;
+    } else if (iterable.is_string()) {
+        const std::string &string = std::get<std::string>(iterable.data);
+
+        snapshot.reserve(string.size());
+
+        for (const char character : string)
+            snapshot.emplace_back(character);
+    } else {
+        throw RuntimeError(statement.keyword, "for-in requires array or string, got " + iterable.type_name());
+    }
+
+    const std::shared_ptr<Environment> loop_environment = environment_;
+
+    for (Value element : snapshot) {
+        auto iteration_environment = std::make_shared<Environment>(loop_environment);
+
+        iteration_environment->define(statement.variable, std::move(element));
+
+        try {
+            execute_in_environment(*statement.body, std::move(iteration_environment));
+        } catch (const ContinueSignal &) {
+            continue;
+        } catch (const BreakSignal &) {
+            break;
+        }
+    }
+}
+
 Interpreter::ResolvedTarget Interpreter::resolve_target(const Expr &expression) {
     if (const auto *variable = std::get_if<VariableExpr>(&expression.node)) {
         const Token name = variable->name;
@@ -990,4 +1083,19 @@ void Interpreter::warning(const Token &token, const std::string &message) {
         diagnostics_ << "Runtime warning at " << token.position.line << ":" << token.position.column << ": " << message
                      << '\n';
     }
+}
+
+void Interpreter::execute_in_environment(const Stmt &statement, std::shared_ptr<Environment> environment) {
+    const std::shared_ptr<Environment> previous = environment_;
+
+    environment_ = std::move(environment);
+
+    try {
+        execute(statement);
+    } catch (...) {
+        environment_ = previous;
+        throw;
+    }
+
+    environment_ = previous;
 }

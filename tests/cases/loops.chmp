@@ -1,0 +1,38 @@
+var value = 0;
+
+while (value < 7) {
+    value++;
+
+    if (value == 2)
+        continue;
+
+    if (value == 6)
+        break;
+
+    print(value, "\n");
+}
+
+var outer = 0;
+
+while (outer < 2) {
+    var inner = 0;
+
+    while (inner < 3) {
+        inner++;
+
+        if (inner == 2)
+            continue;
+
+        print(outer, ":", inner, "\n");
+    }
+
+    outer++;
+}
+
+fun return_from_loop() {
+    while (true) {
+        return 42;
+    }
+}
+
+print(return_from_loop(), "\n");

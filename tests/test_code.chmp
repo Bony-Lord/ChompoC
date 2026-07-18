@@ -157,3 +157,20 @@ second[0][0] = 10;
 
 print(first, "\n");
 print(second, "\n");
+
+fun test() {
+    var value = 0;
+
+    while (value < 10) {
+        value++;
+
+        if (value < 5)
+            continue;
+
+        return value;
+    }
+
+    return NULL;
+}
+
+print(test()); // 5

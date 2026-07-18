@@ -109,6 +109,7 @@ const Parser::ParseRule &Parser::get_rule(TokenType type) {
         result[token_index(TokenType::AndAnd)] = {nullptr, &Parser::binary, Precedence::And};
         result[token_index(TokenType::OrOr)] = {nullptr, &Parser::binary, Precedence::Or};
         result[token_index(TokenType::Equal)] = {nullptr, &Parser::assignment, Precedence::Assignment};
+        result[token_index(TokenType::In)] = {nullptr, &Parser::binary, Precedence::Comparison};
 
         return result;
     }();
@@ -291,9 +292,22 @@ StmtPtr Parser::function_declaration() {
 
     consume(TokenType::LeftBrace, "expected '{' before function body");
 
+    const std::size_t previous_loop_depth = std::exchange(loop_depth_, 0);
+
     ++function_depth_;
-    std::vector<StmtPtr> body = block();
+
+    std::vector<StmtPtr> body;
+
+    try {
+        body = block();
+    } catch (...) {
+        --function_depth_;
+        loop_depth_ = previous_loop_depth;
+        throw;
+    }
+
     --function_depth_;
+    loop_depth_ = previous_loop_depth;
 
     return std::make_unique<Stmt>(FunctionStmt{name, std::move(parameters), std::move(body)});
 }
@@ -307,6 +321,14 @@ StmtPtr Parser::statement() {
         return block_statement();
     if (match({TokenType::If}))
         return if_statement();
+    if (match({TokenType::While}))
+        return while_statement();
+    if (match({TokenType::For}))
+        return for_in_statement();
+    if (match({TokenType::Continue}))
+        return continue_statement();
+    if (match({TokenType::Break}))
+        return break_statement();
     if (match({TokenType::Return}))
         return return_statement();
     return expression_statement();
@@ -370,4 +392,68 @@ StmtPtr Parser::if_statement() {
     if (match({TokenType::Else}))
         else_branch = statement();
     return std::make_unique<Stmt>(IfStmt(std::move(condition), std::move(then_branch), std::move(else_branch)));
+}
+StmtPtr Parser::while_statement() {
+    const Token keyword = previous();
+    consume(TokenType::LeftParen, "expected '(' after 'while'");
+    ExprPtr condition = expression();
+    consume(TokenType::RightParen, "expected ')' after while condition");
+    ++loop_depth_;
+    StmtPtr body;
+    try {
+        body = statement();
+    } catch (...) {
+        --loop_depth_;
+        throw;
+    }
+    --loop_depth_;
+    return std::make_unique<Stmt>(WhileStmt{keyword, std::move(condition), std::move(body)});
+}
+StmtPtr Parser::break_statement() {
+    const Token keyword = previous();
+    if (loop_depth_ == 0) {
+        error(keyword, "'break' can only be used inside a loop");
+    }
+    consume(TokenType::Semicolon, "expected ';' after 'break'");
+
+    return std::make_unique<Stmt>(BreakStmt{keyword});
+}
+StmtPtr Parser::continue_statement() {
+    const Token keyword = previous();
+    if (loop_depth_ == 0) {
+        error(keyword, "'continue' can only be used inside a loop");
+    }
+    consume(TokenType::Semicolon, "expected ';' after 'continue'");
+
+    return std::make_unique<Stmt>(ContinueStmt{keyword});
+}
+StmtPtr Parser::for_in_statement() {
+    const Token keyword = previous();
+
+    consume(TokenType::LeftParen, "expected '(' after 'for'");
+
+    consume(TokenType::Var, "expected 'var' after '(' in for-in loop");
+
+    const Token variable = consume(TokenType::Identifier, "expected iteration variable name");
+
+    consume(TokenType::In, "expected 'in' after iteration variable");
+
+    ExprPtr iterable = expression();
+
+    consume(TokenType::RightParen, "expected ')' after for-in iterable");
+
+    ++loop_depth_;
+
+    StmtPtr body;
+
+    try {
+        body = statement();
+    } catch (...) {
+        --loop_depth_;
+        throw;
+    }
+
+    --loop_depth_;
+
+    return std::make_unique<Stmt>(ForInStmt{keyword, variable, std::move(iterable), std::move(body)});
 }
