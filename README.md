@@ -377,10 +377,10 @@ ctest --test-dir build --output-on-failure
 - [x] `len(Array | String)`
 - [x] Runtime StackOverflow для рекурсии
 - [x] CTest-набор базовых языковых тестов
-- [ ] `while`
-- [ ] `break` и `continue`
-- [ ] оператор принадлежности `in`
-- [ ] `for (var value in sequence)`
+- [x] `while`
+- [x] `break` и `continue`
+- [x] оператор принадлежности `in`
+- [x] `for (var value in sequence)`
 - [ ] `range(...)`
 - [ ] `pop(array)`
 
