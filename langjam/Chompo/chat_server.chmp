@@ -131,37 +131,47 @@ fun splitCmd(line) {
     return Array{head, sliceFrom(line, space + 1)};
 }
 
-fun isIdentChar(ch) {
-    if (ch >= "a"[0] && ch <= "z"[0])
+// Char indexing is byte-based; high UTF-8 bytes come back as negative Int values.
+fun byteCode(ch) {
+    var code = Int(ch);
+    if (code < 0)
+        return code + 256;
+    return code;
+}
+
+fun isControlByte(ch) {
+    var code = byteCode(ch);
+    if (code < 32)
         return true;
-    if (ch >= "A"[0] && ch <= "Z"[0])
-        return true;
-    if (ch >= "0"[0] && ch <= "9"[0])
-        return true;
-    if (ch == "_"[0] || ch == "."[0] || ch == "-"[0])
+    if (code == 127)
         return true;
     return false;
 }
 
-fun isSafeIdent(candidate, maxLen) {
-    if (len(candidate) == 0 || len(candidate) > maxLen)
+// Names: UTF-8 allowed (e.g. Cyrillic). Block controls, ESC, ':', and leading '/'.
+fun isSafeName(candidate, maxBytes) {
+    if (len(candidate) == 0 || len(candidate) > maxBytes)
+        return false;
+    if (candidate[0] == "/"[0])
         return false;
     var index = 0;
     while (index < len(candidate)) {
-        if (!isIdentChar(candidate[index]))
+        var ch = candidate[index];
+        if (isControlByte(ch))
+            return false;
+        if (ch == ":"[0])
             return false;
         index++;
     }
     return true;
 }
 
-// Strip C0 controls, DEL, and ESC so remote content cannot drive the terminal.
+// Strip C0 controls / DEL / ESC only. Keep all printable ASCII and full UTF-8.
 fun sanitizeRemote(text) {
     var result = "";
     var index = 0;
     while (index < len(text)) {
-        var code = Int(text[index]);
-        if (code >= 32 && code != 127 && code != 27)
+        if (!isControlByte(text[index]))
             result = result + text[index];
         index++;
     }
@@ -415,8 +425,8 @@ fun registerName(handle, candidate) {
         nameError(handle, "cannot be empty");
         return true;
     }
-    if (!isSafeIdent(candidate, 24)) {
-        nameError(handle, "must match [A-Za-z0-9_.-]{1,24}");
+    if (!isSafeName(candidate, 48)) {
+        nameError(handle, "must be 1..48 bytes, UTF-8 ok, no controls or ':'");
         return true;
     }
     if (candidate in banned) {
@@ -491,8 +501,8 @@ fun renameClient(handle, candidate) {
         nameError(handle, "cannot be empty");
         return true;
     }
-    if (!isSafeIdent(candidate, 24)) {
-        nameError(handle, "must match [A-Za-z0-9_.-]{1,24}");
+    if (!isSafeName(candidate, 48)) {
+        nameError(handle, "must be 1..48 bytes, UTF-8 ok, no controls or ':'");
         return true;
     }
     if (candidate in banned) {
@@ -565,8 +575,8 @@ fun cmdRooms(handle) {
 }
 
 fun cmdJoin(handle, index, roomName) {
-    if (!isSafeIdent(roomName, 24))
-        return sendChatLine(handle, "ERROR room name must match [A-Za-z0-9_.-]{1,24}");
+    if (!isSafeName(roomName, 48))
+        return sendChatLine(handle, "ERROR room name must be 1..48 bytes, UTF-8 ok, no controls or ':'");
 
     var oldRoom = rooms[index];
     if (oldRoom == roomName)
@@ -614,7 +624,7 @@ fun cmdBan(handle, index, targetName) {
         return true;
     if (len(targetName) == 0)
         return sendChatLine(handle, "ERROR usage: /ban <name>");
-    if (!isSafeIdent(targetName, 24))
+    if (!isSafeName(targetName, 48))
         return sendChatLine(handle, "ERROR invalid name");
 
     if (!(targetName in banned)) {
@@ -709,7 +719,7 @@ fun cmdWhitelist(handle, index, rest) {
 
     if (action == "add") {
         var name = splitCmd(arg)[0];
-        if (!isSafeIdent(name, 24))
+        if (!isSafeName(name, 48))
             return sendChatLine(handle, "ERROR usage: /whitelist add <name>");
         if (!(name in whitelist)) {
             whitelist[name] = true;

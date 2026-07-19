@@ -216,12 +216,21 @@ def run_basic_secure(executable: Path, server_source: Path, client_source: Path)
         bob.wait_contains("USER Alice online")
         bob.wait_contains("USER Bob online")
 
+        # UTF-8 / Cyrillic nick and message
+        alice.send("/nick Алиса")
+        alice.wait_contains("OK NAME Алиса")
+        bob.wait_contains("* Alice is now known as Алиса")
+        cyrillic = "Привет, мир"
+        alice.send(cyrillic)
+        alice.wait_contains("Алиса: " + cyrillic)
+        bob.wait_contains("Алиса: " + cyrillic)
+
         bob.send("/status away")
         bob.wait_contains("* Bob is now away")
         alice.wait_contains("* Bob is now away")
 
-        bob.send("/msg Alice secret-dm")
-        bob.wait_contains("[DM to Alice] secret-dm")
+        bob.send("/msg Алиса secret-dm")
+        bob.wait_contains("[DM to Алиса] secret-dm")
         alice.wait_contains("[DM from Bob] secret-dm")
 
         bob.send("/nick Boris")
@@ -248,6 +257,7 @@ def run_basic_secure(executable: Path, server_source: Path, client_source: Path)
         require(server.wait_exit() == 0, f"server exited with {server.process.returncode}: {server.stderr}")
 
         require("Hello Bob" in server.stdout, "server did not log the message")
+        require(cyrillic in server.stdout, "server did not log the Cyrillic message")
         require("SECURITY rejected client packet" not in server.stdout, "valid encrypted traffic was rejected")
     finally:
         for client in clients:

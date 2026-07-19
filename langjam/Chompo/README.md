@@ -59,8 +59,8 @@ Terminal 2+ — client (host, port, password optional; if omitted, the client pr
 - Admin moderation: `/kick`, `/ban`, `/unban`, `/bans`, `/whitelist`
 - Local mute on the client: `/mute`, `/unmute`, `/mutes`
 - Statuses, DMs, nick changes, server console (`/say`, `/kick`, `/stop`)
-- Strict usernames: `[A-Za-z0-9_.-]{1,24}`
-- Remote text sanitization (control characters / ESC stripped before display)
+- UTF-8 nicknames and messages (including Cyrillic); names up to 48 bytes, no controls or `:`
+- Remote text sanitization (control characters / ESC stripped; UTF-8 preserved)
 
 ## Client commands
 

@@ -51,8 +51,8 @@ LISTENING 54321 SECURE AES-256-GCM
 - локальный `/mute` / `/unmute` / `/mutes`;
 - `/status`, `/nick`, `/me`, `/msg`, `/ping`;
 - server console: `/say`, `/kick`, `/stop`;
-- username: `[A-Za-z0-9_.-]{1,24}`;
-- sanitization удалённого текста (C0 / DEL / ESC).
+- username: UTF-8 (в т.ч. кириллица), до 48 байт; без control-символов и `:`;
+- sanitization удалённого текста (C0 / DEL / ESC; UTF-8 сохраняется).
 
 ## Протокол (упрощённо)
 

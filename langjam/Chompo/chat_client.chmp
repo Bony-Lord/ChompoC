@@ -92,12 +92,29 @@ fun listRemoveItem(list, value) {
     return true;
 }
 
+// Char indexing is byte-based; high UTF-8 bytes come back as negative Int values.
+fun byteCode(ch) {
+    var code = Int(ch);
+    if (code < 0)
+        return code + 256;
+    return code;
+}
+
+fun isControlByte(ch) {
+    var code = byteCode(ch);
+    if (code < 32)
+        return true;
+    if (code == 127)
+        return true;
+    return false;
+}
+
+// Strip C0 controls / DEL / ESC only. Keep printable ASCII and full UTF-8 (Cyrillic etc.).
 fun sanitizeRemote(text) {
     var result = "";
     var index = 0;
     while (index < len(text)) {
-        var code = Int(text[index]);
-        if (code >= 32 && code != 127 && code != 27)
+        if (!isControlByte(text[index]))
             result = result + text[index];
         index++;
     }
