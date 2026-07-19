@@ -64,3 +64,5 @@ jobs:
 
           git commit -m "Sync docs/wiki from ${SOURCE_SHA}"
           git push origin HEAD
+
+# The first synchronization requires an initialized GitHub Wiki repository.
