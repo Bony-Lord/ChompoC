@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import queue
 import socket
 import struct
@@ -57,7 +58,8 @@ def wait_server_line(lines: queue.Queue[str], timeout: float = 5.0) -> str:
 
 
 def abrupt_close(sock: socket.socket) -> None:
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    linger = struct.pack("hh", 1, 0) if os.name == "nt" else struct.pack("ii", 1, 0)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, linger)
     sock.close()
 
 

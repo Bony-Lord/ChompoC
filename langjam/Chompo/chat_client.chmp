@@ -27,6 +27,35 @@ fun printPacket(packet) {
     return false;
 }
 
+fun waitForGoodbye(socket) {
+    var attempts = 0;
+
+    while (attempts < 30) {
+        var ready = netPoll(Array{socket}, 100);
+        if (len(ready) > 0) {
+            while (true) {
+                var packet = netReceiveLine(socket);
+
+                if (packet[0] == "wait")
+                    break;
+
+                if (packet[0] != "data") {
+                    printPacket(packet);
+                    return NULL;
+                }
+
+                printPacket(packet);
+                if (packet[1] == "BYE")
+                    return NULL;
+            }
+        }
+
+        attempts++;
+    }
+
+    return NULL;
+}
+
 fun main() {
     var socket = netConnect(serverHost, serverPort);
 
@@ -70,11 +99,15 @@ fun main() {
                 flush();
                 running = false;
             }
-            if (line == "/quit")
+
+            if (line == "/quit") {
+                waitForGoodbye(socket);
                 running = false;
+            }
         } else {
             if (console[0] == "closed") {
-                sendLine(socket, "/quit");
+                if (sendLine(socket, "/quit"))
+                    waitForGoodbye(socket);
                 running = false;
             }
         }
