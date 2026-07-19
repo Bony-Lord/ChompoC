@@ -81,6 +81,7 @@ const Parser::ParseRule &Parser::get_rule(TokenType type) {
         result[token_index(TokenType::Null)] = {&Parser::literal, nullptr, Precedence::None};
         result[token_index(TokenType::Char)] = {&Parser::literal, nullptr, Precedence::None};
         result[token_index(TokenType::Array)] = {&Parser::array_expression, nullptr, Precedence::None};
+        result[token_index(TokenType::Map)] = {&Parser::map_expression, nullptr, Precedence::None};
         result[token_index(TokenType::Identifier)] = {&Parser::variable, nullptr, Precedence::None};
 
         result[token_index(TokenType::LeftParen)] = {&Parser::grouping, &Parser::call, Precedence::Call};
@@ -177,6 +178,34 @@ ExprPtr Parser::array_expression() {
     if (match({TokenType::LeftBrace}))
         return array_literal();
 
+    return std::make_unique<Expr>(VariableExpr{name});
+}
+
+ExprPtr Parser::map_literal(const Token &map_token) {
+    std::vector<std::pair<ExprPtr, ExprPtr>> elements;
+    if (!check(TokenType::RightBrace)) {
+        while (true) {
+            ExprPtr key = expression();
+            consume(TokenType::Colon, "expected ':' after map key");
+            ExprPtr value = expression();
+            elements.emplace_back(std::move(key), std::move(value));
+            if (!match({TokenType::Comma}))
+                break;
+            if (check(TokenType::RightBrace))
+                break;
+        }
+    }
+    consume(TokenType::RightBrace, "expected '}' after map entries");
+    return std::make_unique<Expr>(MapExpr{map_token, std::move(elements)});
+}
+
+ExprPtr Parser::map_expression() {
+    const Token name = previous();
+
+    if (match({TokenType::LeftBrace}))
+        return map_literal(name);
+
+    // Bare `Map` is a variable / constructor callable name.
     return std::make_unique<Expr>(VariableExpr{name});
 }
 

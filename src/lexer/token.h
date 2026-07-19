@@ -66,6 +66,7 @@ enum class TokenType {
     Class,
     In,
     Array,
+    Map,
 
     Count
 };

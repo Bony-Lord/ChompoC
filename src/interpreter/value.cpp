@@ -4,11 +4,13 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 
 Value::Value() : data(std::monostate{}) {}
 Value::Value(std::nullptr_t) : data(std::monostate{}) {}
 Value::Value(ArrayPtr value) : data(std::move(value)) {}
+Value::Value(MapPtr value) : data(std::move(value)) {}
 Value::Value(bool value) : data(value) {}
 Value::Value(std::int64_t value) : data(value) {}
 Value::Value(std::string value) : data(std::move(value)) {}
@@ -22,6 +24,7 @@ bool Value::is_bool() const { return std::holds_alternative<bool>(data); }
 bool Value::is_integer() const { return std::holds_alternative<std::int64_t>(data); }
 bool Value::is_string() const { return std::holds_alternative<std::string>(data); }
 bool Value::is_array() const { return std::holds_alternative<ArrayPtr>(data); }
+bool Value::is_map() const { return std::holds_alternative<MapPtr>(data); }
 bool Value::is_double() const { return std::holds_alternative<double>(data); }
 bool Value::is_callable() const { return std::holds_alternative<CallablePtr>(data); }
 bool Value::is_char() const { return std::holds_alternative<char>(data); }
@@ -39,10 +42,35 @@ bool Value::is_truthy() const {
         return !string->empty();
     if (const auto *array = std::get_if<ArrayPtr>(&data))
         return *array && !(*array)->empty();
+    if (const auto *map = std::get_if<MapPtr>(&data))
+        return *map && !(*map)->table.empty();
     if (const auto *character = std::get_if<char>(&data))
         return *character != 0;
 
     return true;
+}
+
+bool contains_array_impl(const Value &value, const ArrayValue *target,
+                         std::unordered_set<const ArrayValue *> &visited) {
+    if (!value.is_array())
+        return false;
+    const ArrayPtr &array = std::get<ArrayPtr>(value.data);
+    if (!array)
+        return false;
+    if (array.get() == target)
+        return true;
+    if (!visited.insert(array.get()).second)
+        return false;
+    for (const Value &element : *array) {
+        if (contains_array_impl(element, target, visited))
+            return true;
+    }
+    return false;
+}
+
+bool Value::contains_array(const ArrayValue *target) const {
+    std::unordered_set<const ArrayValue *> visited;
+    return contains_array_impl(*this, target, visited);
 }
 
 bool Value::is_number() const { return is_bool() || is_integer() || is_double() || is_char(); }
@@ -84,6 +112,8 @@ std::string Value::type_name() const {
         return "string";
     if (is_array())
         return "array";
+    if (is_map())
+        return "map";
     if (is_double())
         return "double";
     if (is_callable())
@@ -126,6 +156,23 @@ std::string Value::to_string() const {
         return result;
     }
 
+    if (const auto *map = std::get_if<MapPtr>(&data)) {
+        if (!*map)
+            return "Map{}";
+        std::string result = "Map{";
+        bool first = true;
+        for (const auto &entry : (*map)->table) {
+            if (!first)
+                result += ", ";
+            first = false;
+            result += entry.first.to_string();
+            result += ": ";
+            result += entry.second.to_string();
+        }
+        result += '}';
+        return result;
+    }
+
     if (const auto *doubler = std::get_if<double>(&data)) {
         std::ostringstream output;
         output << std::setprecision(15) << *doubler;
@@ -146,4 +193,50 @@ std::string Value::to_string() const {
         return std::string(1, *character);
 
     return "<unknown>";
+}
+
+std::size_t ValueHash::operator()(const Value &val) const {
+    return std::visit(
+        [](const auto &arg) -> std::size_t {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, std::monostate>) {
+                return 0;
+            } else if constexpr (std::is_same_v<T, bool>) {
+                return std::hash<bool>{}(arg) ^ 0x11111111;
+            } else if constexpr (std::is_same_v<T, std::int64_t>) {
+                return std::hash<std::int64_t>{}(arg) ^ 0x22222222;
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                return std::hash<std::string>{}(arg) ^ 0x33333333;
+            } else if constexpr (std::is_same_v<T, double>) {
+                return std::hash<double>{}(arg) ^ 0x44444444;
+            } else if constexpr (std::is_same_v<T, char>) {
+                return std::hash<char>{}(arg) ^ 0x55555555;
+            } else {
+                if constexpr (std::is_same_v<T, ArrayPtr> || std::is_same_v<T, CallablePtr> ||
+                              std::is_same_v<T, MapPtr>) {
+                    return std::hash<void *>{}(static_cast<void *>(arg.get())) ^ 0x66666666;
+                }
+                return 0;
+            }
+        },
+        val.data);
+}
+
+bool ValueEqual::operator()(const Value &lhs, const Value &rhs) const {
+    if (lhs.data.index() != rhs.data.index())
+        return false;
+
+    return std::visit(
+        [&rhs](const auto &left_val) -> bool {
+            using T = std::decay_t<decltype(left_val)>;
+            if constexpr (std::is_same_v<T, std::monostate>) {
+                return true;
+            } else if constexpr (std::is_same_v<T, ArrayPtr> || std::is_same_v<T, CallablePtr> ||
+                                 std::is_same_v<T, MapPtr>) {
+                return left_val == std::get<T>(rhs.data);
+            } else {
+                return left_val == std::get<T>(rhs.data);
+            }
+        },
+        lhs.data);
 }

@@ -54,6 +54,11 @@ struct ArrayExpr {
     std::vector<ExprPtr> elements;
 };
 
+struct MapExpr {
+    Token token;
+    std::vector<std::pair<ExprPtr, ExprPtr>> elements;
+};
+
 struct IndexExpr {
     ExprPtr object;
     Token bracket;
@@ -68,7 +73,7 @@ struct UpdateExpr {
 
 struct Expr {
     using Node = std::variant<LiteralExpr, UnaryExpr, BinaryExpr, GroupingExpr, VariableExpr, AssignmentExpr, CallExpr,
-                              ArrayExpr, IndexExpr, UpdateExpr>;
+                              ArrayExpr, MapExpr, IndexExpr, UpdateExpr>;
 
     Node node;
 

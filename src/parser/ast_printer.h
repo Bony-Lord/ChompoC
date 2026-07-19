@@ -22,6 +22,7 @@ private:
     std::string print_node(const AssignmentExpr &expression) const;
     std::string print_node(const CallExpr &expression) const;
     std::string print_node(const ArrayExpr &expression) const;
+    std::string print_node(const MapExpr &expression) const;
     std::string print_node(const IndexExpr &expression) const;
     std::string print_node(const UpdateExpr &expression) const;
 

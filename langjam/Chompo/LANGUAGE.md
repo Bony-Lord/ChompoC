@@ -12,10 +12,11 @@ double
 char
 string
 array
+map
 callable
 ```
 
-Strings and `char` values are byte-based. Arrays have reference semantics: assigning an array creates an alias to the same mutable object.
+Strings and `char` values are byte-based. Arrays and maps have reference semantics: assigning them creates an alias to the same mutable object.
 
 ## Variables and expressions
 
@@ -76,9 +77,26 @@ var values = Array{1, 2};
 push(values, 3);
 var last = pop(values);
 var first = removeAt(values, 0);
+
+var user = Map{
+    "name": "Alex",
+    "age": 25
+};
+print(user["name"]);
+if ("age" in user) {
+    print(len(user));
+}
+fun list_factory() {
+    return Array{};
+}
+var groups = Map(list_factory);  // defaultdict-style
+push(groups["odd"], 1);
+var removed = removeKey(groups, "odd");
 ```
 
 Arrays support indexing, nested mutation, concatenation, repetition, `len`, and `in`. Direct and indirect cyclic array references are rejected. Strings support byte indexing and indexed replacement with a `char`.
+
+Maps support heterogeneous keys (string, integer, bool, char, …), `in` for key presence, `len`, index get/set, and optional zero-arg default factories (`Map(factory)`). Missing keys without a factory raise a runtime error; with a factory the value is created, stored, and returned.
 
 ## I/O and script arguments
 
@@ -89,7 +107,7 @@ flush();
 var commandLine = args();
 ```
 
-`inputPoll` returns `Array{"data", line}`, `Array{"wait"}`, or `Array{"closed"}`. `args()` returns arguments passed after the source filename.
+`inputPoll` returns `Array{"data", line}`, `Array{"wait"}`, or `Array{"closed"}`. `args()` returns arguments passed after the source filename. `clockTime()` returns `Array{hour, minute, second}` for the local wall clock (used by the chat server for message timestamps).
 
 ## TCP event loop
 

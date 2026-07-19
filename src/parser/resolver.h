@@ -42,6 +42,7 @@ private:
     void resolve_node(AssignmentExpr &expression);
     void resolve_node(CallExpr &expression);
     void resolve_node(ArrayExpr &expression);
+    void resolve_node(MapExpr &expression);
     void resolve_node(IndexExpr &expression);
     void resolve_node(UpdateExpr &expression);
 

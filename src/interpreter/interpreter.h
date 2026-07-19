@@ -73,6 +73,7 @@ private:
     Value evaluate_node(const AssignmentExpr &expression);
     Value evaluate_node(const CallExpr &expression);
     Value evaluate_node(const ArrayExpr &expression);
+    Value evaluate_node(const MapExpr &expression);
     Value evaluate_node(const IndexExpr &expression);
     Value evaluate_node(const UpdateExpr &expression);
 

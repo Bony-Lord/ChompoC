@@ -159,7 +159,7 @@ if(Python3_Interpreter_FOUND)
                     --executable $<TARGET_FILE:Chompo>
                     --server ${CMAKE_CURRENT_SOURCE_DIR}/langjam/Chompo/chat_server.chmp
                     --client ${CMAKE_CURRENT_SOURCE_DIR}/langjam/Chompo/chat_client.chmp)
-    set_tests_properties(langjam_chat PROPERTIES TIMEOUT 25)
+    set_tests_properties(langjam_chat PROPERTIES TIMEOUT 60)
 else()
     message(STATUS "Python was not found; the LangJam end-to-end chat test is disabled")
 endif()

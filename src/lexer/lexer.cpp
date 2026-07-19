@@ -11,6 +11,7 @@ namespace {
         {"return", TokenType::Return}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
         {"fun", TokenType::Fun},       {"true", TokenType::True},   {"false", TokenType::False},
         {"NULL", TokenType::Null},     {"in", TokenType::In},       {"Array", TokenType::Array},
+        {"Map", TokenType::Map},
     };
 }
 
@@ -45,7 +46,7 @@ char Lexer::advance() {
 void Lexer::add_token(TokenType type) {
     Token token{type, source_.substr(start_, current_ - start_), start_position_};
 
-    if (type == TokenType::Identifier || type == TokenType::Array)
+    if (type == TokenType::Identifier || type == TokenType::Array || type == TokenType::Map)
         token.symbol = intern_symbol(token.lexeme);
 
     tokens_.push_back(std::move(token));

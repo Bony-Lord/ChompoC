@@ -108,6 +108,8 @@ std::string_view token_type_name(TokenType type) {
         return "Class";
     case TokenType::Count:
         return "Count";
+    case TokenType::Map:
+        return "Map";
     }
 
     return "Unknown";

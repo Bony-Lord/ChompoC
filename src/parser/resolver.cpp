@@ -193,6 +193,13 @@ void Resolver::resolve_node(ArrayExpr &expression) {
         resolve(*element);
 }
 
+void Resolver::resolve_node(MapExpr &expression) {
+    for (auto &entry : expression.elements) {
+        resolve(*entry.first);
+        resolve(*entry.second);
+    }
+}
+
 void Resolver::resolve_node(IndexExpr &expression) {
     resolve(*expression.object);
     resolve(*expression.index);

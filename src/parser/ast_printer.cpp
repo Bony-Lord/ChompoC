@@ -59,6 +59,17 @@ std::string AstPrinter::print_node(const ArrayExpr &expression) const {
     result += ")";
     return result;
 }
+std::string AstPrinter::print_node(const MapExpr &expression) const {
+    std::string result = "(map";
+    for (const auto &entry : expression.elements) {
+        result += " ";
+        result += print(*entry.first);
+        result += ":";
+        result += print(*entry.second);
+    }
+    result += ")";
+    return result;
+}
 std::string AstPrinter::print_node(const IndexExpr &expression) const {
     return parenthesize("index", {expression.object.get(), expression.index.get()});
 }

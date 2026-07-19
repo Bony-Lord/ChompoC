@@ -25,12 +25,10 @@ var BRIGHT_WHITE = ESC + "[97m";
 var HEX = "0123456789abcdef";
 var ENC_PREFIX = "#E#";
 
-// Fixed-width ASCII chrome (column-aligned in any monospaced terminal).
-// Interior width = 36; total line width = 38 including borders.
 var BANNER_TOP = "+------------------------------------+";
 var BANNER_BOT = "+------------------------------------+";
-var BANNER_TITLE = "        Chompo Chat  v1             ";
-var BANNER_SUB = "  multi-user / optional room crypto ";
+var BANNER_TITLE = "        Chompo Chat  v2             ";
+var BANNER_SUB = " rooms / mute / roles / timestamps  ";
 var PROMPT_TEXT = "> ";
 
 var named = false;
@@ -40,6 +38,9 @@ var needPrompt = false;
 var promptOpen = false;
 var inHistory = false;
 var ownName = "";
+var ownRole = "member";
+var currentRoom = "lobby";
+var muted = Array{};
 
 fun sendLine(socket, text) {
     var result = netSendAll(socket, text + "\n", 2000);
@@ -165,6 +166,16 @@ fun findColon(text) {
     return -1;
 }
 
+fun findChar(text, ch, start) {
+    var index = start;
+    while (index < len(text)) {
+        if (text[index] == ch)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
 fun sliceFrom(text, start) {
     var result = "";
     var index = start;
@@ -183,6 +194,62 @@ fun sliceTo(text, end) {
         index++;
     }
     return result;
+}
+
+fun findSpace(text, start) {
+    var index = start;
+    while (index < len(text)) {
+        if (text[index] == ' ')
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun skipSpaces(text, start) {
+    var index = start;
+    while (index < len(text) && text[index] == ' ')
+        index++;
+    return index;
+}
+
+fun splitCmd(line) {
+    var start = skipSpaces(line, 0);
+    if (start >= len(line))
+        return Array{"", ""};
+    var space = findSpace(line, start);
+    if (space < 0)
+        return Array{sliceFrom(line, start), ""};
+    var head = sliceFrom(sliceTo(line, space), start);
+    var rest = sliceFrom(line, skipSpaces(line, space));
+    return Array{head, rest};
+}
+
+fun listContains(list, item) {
+    var index = 0;
+    while (index < len(list)) {
+        if (list[index] == item)
+            return true;
+        index++;
+    }
+    return false;
+}
+
+fun listIndexOf(list, item) {
+    var index = 0;
+    while (index < len(list)) {
+        if (list[index] == item)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listRemoveItem(list, item) {
+    var index = listIndexOf(list, item);
+    if (index >= 0)
+        removeAt(list, index);
+    return index >= 0;
 }
 
 fun printBanner() {
@@ -208,6 +275,59 @@ fun endPromptLine() {
     }
 }
 
+// Parse chat wire lines:
+//   [HH:MM:SS] name: body
+//   name: body   (legacy fallback)
+// Returns Array{stamp, name, body} or NULL if not a chat line.
+fun parseChatLine(line) {
+    var stamp = "";
+    var rest = line;
+
+    if (len(line) > 0 && line[0] == '[') {
+        var close = findChar(line, ']', 1);
+        if (close > 1 && close + 1 < len(line) && line[close + 1] == ' ') {
+            stamp = sliceTo(line, close + 1);
+            // stamp is "[HH:MM:SS]"
+            rest = sliceFrom(line, close + 2);
+        }
+    }
+
+    var colon = findColon(rest);
+    if (colon > 0 && colon + 1 < len(rest) && rest[colon + 1] == ' ') {
+        var name = sliceTo(rest, colon);
+        var body = sliceFrom(rest, colon + 2);
+        // System / control lines never look like "word: rest" with a simple name.
+        if (startsWith(line, "ERROR ") || startsWith(line, "OK ") || startsWith(line, "COMMANDS ") ||
+            startsWith(line, "HISTORY ") || startsWith(line, "AUTH ") || startsWith(line, "NAME ") ||
+            startsWith(line, "ROLE ") || startsWith(line, "ROOM ") || startsWith(line, "ROOMS ") ||
+            startsWith(line, "WHO ") || startsWith(line, "STATUS ") || startsWith(line, "STATUSES ") ||
+            startsWith(line, "BANS ") || startsWith(line, "WHITELIST ") || startsWith(line, "* "))
+            return NULL;
+        return Array{stamp, name, body};
+    }
+
+    return NULL;
+}
+
+fun styleChat(stamp, name, body) {
+    var encrypted = startsWith(body, ENC_PREFIX);
+    var text = decrypt(body, roomPassword);
+    var label = "";
+    if (encrypted && len(roomPassword) > 0 && text != body)
+        label = DIM + " [enc]" + RESET;
+    else {
+        if (encrypted)
+            label = DIM + " [enc raw]" + RESET;
+    }
+
+    // Time on the left: [HH:MM:SS] name: message
+    var timePart = "";
+    if (len(stamp) > 0)
+        timePart = DIM + stamp + RESET + " ";
+
+    return timePart + MAGENTA + BOLD + name + RESET + DIM + ":" + RESET + " " + BRIGHT_WHITE + text + RESET + label;
+}
+
 fun styleLine(line) {
     if (startsWith(line, "ERROR "))
         return RED + BOLD + line + RESET;
@@ -218,13 +338,10 @@ fun styleLine(line) {
     if (line == "BYE")
         return GREEN + BOLD + line + RESET;
 
-    if (startsWith(line, "AUTH "))
-        return YELLOW + line + RESET;
-
-    if (startsWith(line, "NAME "))
-        return YELLOW + line + RESET;
-
-    if (startsWith(line, "COMMANDS "))
+    if (startsWith(line, "AUTH ") || startsWith(line, "NAME ") || startsWith(line, "COMMANDS ") ||
+        startsWith(line, "ROLE ") || startsWith(line, "ROOM ") || startsWith(line, "ROOMS ") ||
+        startsWith(line, "WHO ") || startsWith(line, "STATUS ") || startsWith(line, "STATUSES ") ||
+        startsWith(line, "BANS ") || startsWith(line, "WHITELIST "))
         return YELLOW + line + RESET;
 
     if (startsWith(line, "HISTORY ") || line == "END")
@@ -233,48 +350,43 @@ fun styleLine(line) {
     if (startsWith(line, "* "))
         return CYAN + DIM + line + RESET;
 
-    var colon = findColon(line);
-    if (colon > 0 && colon + 1 < len(line) && line[colon + 1] == ' ') {
-        var name = sliceTo(line, colon);
-        var body = sliceFrom(line, colon + 2);
-        var encrypted = startsWith(body, ENC_PREFIX);
-        var text = decrypt(body, roomPassword);
-        var label = "";
-        if (encrypted && len(roomPassword) > 0 && text != body)
-            label = DIM + " [enc]" + RESET;
-        else {
-            if (encrypted)
-                label = DIM + " [enc raw]" + RESET;
-        }
-        return MAGENTA + BOLD + name + RESET + DIM + ":" + RESET + " " + BRIGHT_WHITE + text + RESET + label;
-    }
+    var parsed = parseChatLine(line);
+    if (parsed != NULL)
+        return styleChat(parsed[0], parsed[1], parsed[2]);
 
     return line;
 }
 
+fun isMutedChat(line) {
+    var parsed = parseChatLine(line);
+    if (parsed == NULL)
+        return false;
+    return listContains(muted, parsed[1]);
+}
+
 fun isOwnLiveChat(line) {
-    // Skip server echo of our own chat lines (TTY already showed what we typed).
-    // History still shows our past messages (inHistory == true).
     if (inHistory)
         return false;
     if (len(ownName) == 0)
         return false;
 
-    var prefix = ownName + ": ";
-    if (!startsWith(line, prefix))
+    var parsed = parseChatLine(line);
+    if (parsed == NULL)
         return false;
-
-    // Only user chat ("name: body"), not system lines.
-    return true;
+    return parsed[1] == ownName;
 }
 
-// Print one inbound wire line exactly once. If a prompt is open mid-line,
-// finish that visual line first so traffic never smashes into "> ".
 fun printInbound(line) {
     if (startsWith(line, "HISTORY "))
         inHistory = true;
 
-    var skipPrint = isOwnLiveChat(line);
+    if (startsWith(line, "ROLE "))
+        ownRole = sliceFrom(line, 5);
+
+    if (startsWith(line, "ROOM "))
+        currentRoom = sliceFrom(line, 5);
+
+    var skipPrint = isOwnLiveChat(line) || isMutedChat(line);
 
     if (!skipPrint) {
         endPromptLine();
@@ -285,9 +397,6 @@ fun printInbound(line) {
     if (line == "END")
         inHistory = false;
 
-    // Defer the chat prompt during OK/HISTORY bootstrap so an empty "> "
-    // does not appear between registration lines when TCP delivers them
-    // across multiple poll rounds.
     if (named && !inHistory) {
         if (startsWith(line, "OK "))
             needPrompt = false;
@@ -365,8 +474,71 @@ fun prepareOutgoing(line) {
     return encrypt(line, roomPassword);
 }
 
-// Prompt for room password and send it. Returns false on EOF/send failure.
-// Crypto status is printed only after the server replies OK auth.
+// Client-local commands: mute list (never sent to server).
+// Returns true if the line was fully handled locally.
+fun handleLocalCommand(line) {
+    if (len(line) == 0 || line[0] != '/')
+        return false;
+
+    var parts = splitCmd(line);
+    var cmd = parts[0];
+    var rest = parts[1];
+
+    if (cmd == "/mute") {
+        var target = splitCmd(rest)[0];
+        if (len(target) == 0) {
+            printStatus("usage: /mute <name>\n", YELLOW);
+            return true;
+        }
+        if (target == ownName) {
+            printStatus("cannot mute yourself\n", YELLOW);
+            return true;
+        }
+        if (!listContains(muted, target))
+            push(muted, target);
+        printStatus("muted " + target + "\n", GREEN);
+        return true;
+    }
+
+    if (cmd == "/unmute") {
+        var target = splitCmd(rest)[0];
+        if (len(target) == 0) {
+            printStatus("usage: /unmute <name>\n", YELLOW);
+            return true;
+        }
+        if (!listRemoveItem(muted, target))
+            printStatus(target + " was not muted\n", YELLOW);
+        else
+            printStatus("unmuted " + target + "\n", GREEN);
+        return true;
+    }
+
+    if (cmd == "/mutes") {
+        var body = "";
+        var i = 0;
+        while (i < len(muted)) {
+            if (i > 0)
+                body = body + " ";
+            body = body + muted[i];
+            i++;
+        }
+        if (len(body) == 0)
+            body = "(none)";
+        printStatus("muted: " + body + "\n", CYAN);
+        return true;
+    }
+
+    // Extend /help locally with client-only commands after server reply is not
+    // available here — print a short client tip when user asks /help and still
+    // forward /help to the server for COMMANDS.
+    if (cmd == "/help") {
+        printStatus("client: /mute /unmute /mutes\n", DIM);
+        return false;
+    }
+
+    return false;
+}
+
 fun promptAndSendPassword(socket) {
     print(YELLOW, BOLD, "Password: ", RESET);
     flush();
@@ -374,7 +546,6 @@ fun promptAndSendPassword(socket) {
     if (password == NULL)
         return false;
 
-    // Pipe stdin does not echo; end the line so the next reply is clean.
     print("\n");
     flush();
 
@@ -388,7 +559,6 @@ fun promptAndSendPassword(socket) {
     return true;
 }
 
-// Prompt for a display name and send it. Returns false on EOF/send failure.
 fun promptAndSendName(socket) {
     print(CYAN, BOLD, "Name: ", RESET);
     flush();
@@ -396,8 +566,6 @@ fun promptAndSendName(socket) {
     if (name == NULL)
         return false;
 
-    // Pipe stdin does not echo the typed name; end the line so the next
-    // server reply is not glued to "Name: ".
     print("\n");
     flush();
 
@@ -434,7 +602,6 @@ fun main() {
 
                     if (startsWith(line, "AUTH ")) {
                         printInbound(line);
-                        // Always show a full Password: field when the room is locked.
                         if (!promptAndSendPassword(socket)) {
                             running = false;
                             break;
@@ -457,13 +624,19 @@ fun main() {
                                 }
                             } else {
                                 if (startsWith(line, "OK ") && line != "OK auth" && !named) {
-                                    named = true;
-                                    ownName = sliceFrom(line, 3);
-                                    needPrompt = true;
+                                    // First registration OK is "OK <name>" without extra words
+                                    // (later OK status replies also start with OK).
+                                    var maybeName = sliceFrom(line, 3);
+                                    if (!startsWith(maybeName, "status ") && !startsWith(maybeName, "banned ") &&
+                                        !startsWith(maybeName, "unbanned ") && !startsWith(maybeName, "whitelist ") &&
+                                        !startsWith(maybeName, "already ")) {
+                                        named = true;
+                                        ownName = maybeName;
+                                        needPrompt = true;
+                                    }
                                 }
 
                                 if (startsWith(line, "ERROR ") && !authDone) {
-                                    // Wrong password — re-prompt Password:, never Name:.
                                     printInbound(line);
                                     if (!promptAndSendPassword(socket)) {
                                         running = false;
@@ -471,7 +644,6 @@ fun main() {
                                     }
                                 } else {
                                     if (startsWith(line, "ERROR ") && authDone && !named) {
-                                        // Name rejected — re-prompt Name:.
                                         printInbound(line);
                                         if (!promptAndSendName(socket)) {
                                             running = false;
@@ -507,22 +679,24 @@ fun main() {
 
         var console = inputPoll(0);
         if (console[0] == "data") {
-            // On a TTY, Enter already advanced the cursor (one extra blank line
-            // is acceptable). On a pipe there is no echo, so we must end the
-            // dangling "> " line or the next inbound print would smash into it.
             endPromptLine();
             needPrompt = true;
 
             var line = console[1];
-            var outgoing = prepareOutgoing(line);
-            if (!sendLine(socket, outgoing)) {
-                printStatus("Failed to send message.\n", RED);
-                running = false;
-            }
 
-            if (line == "/quit") {
-                waitForGoodbye(socket);
-                running = false;
+            if (handleLocalCommand(line)) {
+                // Local-only; nothing to send (except /help which returns false).
+            } else {
+                var outgoing = prepareOutgoing(line);
+                if (!sendLine(socket, outgoing)) {
+                    printStatus("Failed to send message.\n", RED);
+                    running = false;
+                }
+
+                if (line == "/quit") {
+                    waitForGoodbye(socket);
+                    running = false;
+                }
             }
         } else {
             if (console[0] == "closed") {
