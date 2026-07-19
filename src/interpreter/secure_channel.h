@@ -2,10 +2,12 @@
 
 #include "network_manager.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 class SecureChannelManager {
 public:
