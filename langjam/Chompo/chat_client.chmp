@@ -10,6 +10,49 @@ if (len(commandLine) > 1)
 if (len(commandLine) > 2)
     roomPassword = commandLine[2];
 
+fun startsWith(text, prefix) {
+    if (len(text) < len(prefix))
+        return false;
+
+    var index = 0;
+    while (index < len(prefix)) {
+        if (text[index] != prefix[index])
+            return false;
+        index++;
+    }
+    return true;
+}
+
+fun showHeader() {
+    if (termInteractive()) {
+        termClear();
+        termPrint("╔════════════════════════════════════════════════════════════╗", "accent");
+        termPrint("║                    CHOMPO SECURE CHAT                      ║", "accent");
+        termPrint("╚════════════════════════════════════════════════════════════╝", "accent");
+    }
+
+    termPrint("🔒 AES-256-GCM  •  " + serverHost + ":" + String(serverPort), "muted");
+    termPrint("/help  /users  /status  /history  /clear  /quit", "muted");
+    termPrint("", "default");
+}
+
+fun packetStyle(text) {
+    if (len(text) > 0 && text[0] == "*"[0])
+        return "system";
+    if (startsWith(text, "ERROR") || startsWith(text, "KICKED"))
+        return "error";
+    if (startsWith(text, "OK ") || startsWith(text, "PONG") || startsWith(text, "STATUS "))
+        return "success";
+    if (startsWith(text, "COMMANDS") || startsWith(text, "USERS ") || startsWith(text, "USER ") ||
+        startsWith(text, "HISTORY ") || text == "END")
+        return "info";
+    if (startsWith(text, "[DM "))
+        return "accent";
+    if (text == "BYE")
+        return "warning";
+    return "message";
+}
+
 fun sendLine(socket, text) {
     var result = netSecureSendLine(socket, text, 2000);
     return result[0] == "sent";
@@ -17,8 +60,7 @@ fun sendLine(socket, text) {
 
 fun printPacket(packet) {
     if (packet[0] == "data") {
-        print(packet[1], "\n");
-        flush();
+        termPrint(packet[1], packetStyle(packet[1]));
         return true;
     }
 
@@ -26,10 +68,9 @@ fun printPacket(packet) {
         return true;
 
     if (packet[0] == "error")
-        print("Security error: ", packet[1], "\n");
+        termPrint("Ошибка защищённого канала: " + packet[1], "error");
     else
-        print("Disconnected from server.\n");
-    flush();
+        termPrint("Соединение с сервером закрыто.", "warning");
     return false;
 }
 
@@ -62,51 +103,54 @@ fun waitForGoodbye(socket) {
     return NULL;
 }
 
+fun closeClient(socket) {
+    netSecureForget(socket);
+    netClose(socket);
+    termSetPrompt("");
+    termClose();
+    return NULL;
+}
+
 fun main() {
-    if (roomPassword == NULL) {
-        print("Room password: ");
-        flush();
-        roomPassword = input();
-    }
+    termOpen();
+    termSetTitle("Chompo Secure Chat");
+    showHeader();
+
+    if (roomPassword == NULL)
+        roomPassword = termReadLine("Пароль комнаты › ", true, "warning");
 
     if (roomPassword == NULL || len(roomPassword) < 8) {
-        print("Room password must contain at least 8 bytes.\n");
-        flush();
+        termPrint("Пароль комнаты должен содержать не менее 8 байт.", "error");
+        termClose();
         return NULL;
     }
 
+    termPrint("Подключение к " + serverHost + ":" + String(serverPort) + "...", "info");
     var socket = netConnect(serverHost, serverPort);
-    print("Securing connection to ", serverHost, ":", serverPort, "...\n");
-    flush();
 
     var secure = netSecureClient(socket, roomPassword, 7000);
     if (secure[0] != "ok") {
-        print("Secure connection failed: ", secure[1], "\n");
-        flush();
+        termPrint("Не удалось создать защищённое соединение: " + secure[1], "error");
         netClose(socket);
+        termClose();
         return NULL;
     }
 
-    print("Encrypted with AES-256-GCM.\n");
-    print("Name: ");
-    flush();
-    var name = input();
-    if (name == NULL) {
-        netSecureForget(socket);
-        netClose(socket);
-        return NULL;
-    }
+    termPrint("Защищённый канал установлен.", "success");
+    var name = termReadLine("Имя › ", false, "accent");
+    if (name == NULL)
+        return closeClient(socket);
 
     if (!sendLine(socket, name)) {
-        print("Failed to send name.\n");
-        netSecureForget(socket);
-        netClose(socket);
-        return NULL;
+        termPrint("Не удалось отправить имя.", "error");
+        return closeClient(socket);
     }
+
+    termSetPrompt(name + " › ", "accent");
 
     var running = true;
     while (running) {
-        var ready = netPoll(Array{socket}, 50);
+        var ready = netPoll(Array{socket}, 25);
         if (len(ready) > 0) {
             while (true) {
                 var packet = netSecureReceiveLine(socket);
@@ -122,18 +166,23 @@ fun main() {
         if (!running)
             break;
 
-        var console = inputPoll(0);
+        var console = termPoll(0);
         if (console[0] == "data") {
             var line = console[1];
-            if (!sendLine(socket, line)) {
-                print("Failed to send message.\n");
-                flush();
-                running = false;
-            }
 
-            if (line == "/quit") {
-                waitForGoodbye(socket);
-                running = false;
+            if (line == "/clear") {
+                showHeader();
+                termSetPrompt(name + " › ", "accent");
+            } else {
+                if (!sendLine(socket, line)) {
+                    termPrint("Не удалось отправить сообщение.", "error");
+                    running = false;
+                }
+
+                if (line == "/quit") {
+                    waitForGoodbye(socket);
+                    running = false;
+                }
             }
         } else {
             if (console[0] == "closed") {
@@ -144,9 +193,7 @@ fun main() {
         }
     }
 
-    netSecureForget(socket);
-    netClose(socket);
-    return NULL;
+    return closeClient(socket);
 }
 
 main();
