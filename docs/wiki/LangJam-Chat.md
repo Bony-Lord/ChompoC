@@ -39,16 +39,15 @@ AUTH required
 
 ```bash
 ./build/Chompo langjam/Chompo/chat_client.chmp 127.0.0.1 4040
-./build/Chompo langjam/Chompo/chat_client.chmp 127.0.0.1 4040 my-room-secret
 ```
 
-Аргументы клиента: host, port и optional room password (должен совпадать с паролем сервера).
+Аргументы клиента: host и port. Если сервер запущен с room password, клиент при подключении показывает поле **`Password: `**, затем **`Name: `**.
 
 Windows multi-config:
 
 ```powershell
 .\build\Debug\Chompo.exe langjam\Chompo\chat_server.chmp 0.0.0.0 4040 50 secret
-.\build\Debug\Chompo.exe langjam\Chompo\chat_client.chmp 127.0.0.1 4040 secret
+.\build\Debug\Chompo.exe langjam\Chompo\chat_client.chmp 127.0.0.1 4040
 ```
 
 ## Возможности

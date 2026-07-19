@@ -254,6 +254,22 @@ def run_encrypted_smoke(executable: Path, server_source: Path, client_source: Pa
         expect(bad_reader, "AUTH enter room password")
         send_line(bad, "wrong")
         expect(bad_reader, "ERROR wrong password")
+        # Connection stays open for password retry.
+        send_line(bad, "still-wrong")
+        expect(bad_reader, "ERROR wrong password")
+        send_line(bad, password)
+        expect(bad_reader, "OK auth")
+        expect(bad_reader, "NAME choose a unique name")
+        send_line(bad, "Temp")
+        expect(bad_reader, "OK Temp")
+        # drain history + join
+        while True:
+            line = read_line(bad_reader, "history/end")
+            if line == "END":
+                break
+        expect(bad_reader, "* Temp joined")
+        send_line(bad, "/quit")
+        expect(bad_reader, "BYE")
         bad_reader.close()
         bad.close()
         readers.remove(bad_reader)
@@ -307,8 +323,8 @@ def run_encrypted_smoke(executable: Path, server_source: Path, client_source: Pa
         clients.remove(bob)
 
         client = subprocess.run(
-            [str(executable), str(client_source), "127.0.0.1", str(port), password],
-            input="Cli\nsecret-msg\n/quit\n",
+            [str(executable), str(client_source), "127.0.0.1", str(port)],
+            input=password + "\nCli\nsecret-msg\n/quit\n",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -317,6 +333,9 @@ def run_encrypted_smoke(executable: Path, server_source: Path, client_source: Pa
         )
         require(client.returncode == 0, f"encrypted chat client exited with {client.returncode}: {client.stderr}")
         normalized = client.stdout.replace("\r\n", "\n")
+        plain_out = strip_ansi(normalized)
+        require("Password:" in plain_out, f"missing Password: field on AUTH:\n{normalized}")
+        require("Name:" in plain_out, f"missing Name: field after AUTH:\n{normalized}")
         require("OK auth" in normalized or "OK Cli" in normalized, f"client did not auth/register:\n{normalized}")
         require("OK Cli" in normalized, f"client did not register:\n{normalized}")
         # Own live echo suppressed; peer observes ciphertext on the wire.
@@ -378,7 +397,7 @@ def run_client_ui_smoke(executable: Path, server_source: Path, client_source: Pa
 
     try:
         client = subprocess.Popen(
-            [str(executable), str(client_source), "127.0.0.1", str(port), password],
+            [str(executable), str(client_source), "127.0.0.1", str(port)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -390,6 +409,15 @@ def run_client_ui_smoke(executable: Path, server_source: Path, client_source: Pa
         client_lines: queue.Queue[str] = queue.Queue()
         start_output_reader(client.stdout, client_lines)
 
+        # Password: is printed without a trailing newline (like Name:); wait for
+        # the AUTH control line, then type the password into the field.
+        wait_client_output(
+            client_lines,
+            lambda line: "AUTH enter room password" in strip_ansi(line),
+            collected=collected,
+        )
+        client.stdin.write(password + "\n")
+        client.stdin.flush()
         wait_client_output(client_lines, lambda line: "NAME choose a unique name" in strip_ansi(line), collected=collected)
         client.stdin.write("mag\n")
         client.stdin.flush()
@@ -584,12 +612,43 @@ def run_empty_name_retry_client(executable: Path, server_source: Path, client_so
         stop_server(server)
 
 
+def run_wrong_password_retry_client(executable: Path, server_source: Path, client_source: Path) -> None:
+    """Wrong password re-prompts Password:; Name: only after OK auth."""
+    password = "secret"
+    server, _output_lines, port = start_server(executable, server_source, password)
+    try:
+        client = subprocess.run(
+            [str(executable), str(client_source), "127.0.0.1", str(port)],
+            input="wrong\n" + password + "\nGoodUser\n/quit\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            timeout=10,
+        )
+        require(client.returncode == 0, f"client exit {client.returncode}: {client.stderr}")
+        plain = strip_ansi(client.stdout.replace("\r\n", "\n"))
+        require("ERROR wrong password" in plain, f"missing wrong-password error:\n{plain}")
+        require("OK auth" in plain, f"missing OK auth after retry:\n{plain}")
+        require("OK GoodUser" in plain, f"did not register after password retry:\n{plain}")
+        require(plain.count("Password:") >= 2, f"expected Password: re-prompt:\n{plain}")
+        # Name: must not appear before the successful OK auth line.
+        auth_at = plain.find("OK auth")
+        name_at = plain.find("Name:")
+        require(auth_at >= 0 and name_at >= 0, f"missing auth/name markers:\n{plain}")
+        require(name_at > auth_at, f"Name: appeared before OK auth:\n{plain}")
+        require("Disconnected from server" not in plain, f"should not disconnect on wrong password:\n{plain}")
+    finally:
+        stop_server(server)
+
+
 def run_smoke(executable: Path, server_source: Path, client_source: Path) -> None:
     run_plaintext_smoke(executable, server_source, client_source)
     run_encrypted_smoke(executable, server_source, client_source)
     run_client_ui_smoke(executable, server_source, client_source)
     run_no_prereg_broadcast_smoke(executable, server_source)
     run_empty_name_retry_client(executable, server_source, client_source)
+    run_wrong_password_retry_client(executable, server_source, client_source)
 
 
 def main() -> int:

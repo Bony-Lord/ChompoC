@@ -159,9 +159,8 @@ fun authenticate(handle, candidate) {
         return false;
 
     if (candidate != roomPassword) {
-        sendLine(handle, "ERROR wrong password");
-        removeClientAt(index, false);
-        return false;
+        // Keep the socket open so the client can re-prompt Password:.
+        return sendLine(handle, "ERROR wrong password");
     }
 
     authed[index] = true;

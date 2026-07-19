@@ -28,10 +28,9 @@ Terminal 2 and later:
 
 ```bash
 ./build/Chompo langjam/Chompo/chat_client.chmp 127.0.0.1 4040
-./build/Chompo langjam/Chompo/chat_client.chmp 127.0.0.1 4040 my-secret
 ```
 
-On Windows with a multi-config generator, use `build\Debug\Chompo.exe` instead. Server arguments: optional `host`, `port`, `historyLimit`, `password`. Client arguments: optional `host`, `port`, `password`.
+On Windows with a multi-config generator, use `build\Debug\Chompo.exe` instead. Server arguments: optional `host`, `port`, `historyLimit`, `password`. Client arguments: optional `host`, `port`. When the server requires a password, the client prompts with a `Password: ` field, then `Name: `.
 
 ## Chat commands
 
@@ -45,7 +44,7 @@ On Windows with a multi-config generator, use `build\Debug\Chompo.exe` instead. 
 
 When the server is started with a password:
 
-1. Clients must pass `AUTH` with the same password.
+1. Clients answer `AUTH` via the interactive `Password: ` field (same password as the server).
 2. Non-command chat lines are encrypted on the client before send (`#E#` + hex).
 3. The server stores and broadcasts the wire form unchanged.
 4. Clients with the matching password decrypt for display.
