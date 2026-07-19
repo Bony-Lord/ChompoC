@@ -76,6 +76,23 @@ Value secure_error(std::string message) {
     value->emplace_back(std::move(message));
     return Value(std::move(value));
 }
+
+Value step_result_value(const SecureChannelManager::StepResult &result) {
+    auto value = std::make_shared<ArrayValue>();
+    switch (result.status) {
+    case SecureChannelManager::StepStatus::Pending:
+        value->emplace_back("pending");
+        break;
+    case SecureChannelManager::StepStatus::Complete:
+        value->emplace_back("ok");
+        break;
+    case SecureChannelManager::StepStatus::Failed:
+        value->emplace_back("error");
+        value->emplace_back(result.detail.empty() ? "secure handshake failed" : result.detail);
+        break;
+    }
+    return Value(std::move(value));
+}
 }
 
 void Interpreter::install_secure_network_builtins(NetworkManager &network_manager) {
@@ -87,6 +104,7 @@ void Interpreter::install_secure_network_builtins(NetworkManager &network_manage
         globals_->define(std::move(name), Value(std::move(callable)));
     };
 
+    // Blocking convenience wrappers (loop step until complete / timeout).
     define_native("netSecureClient", 2, 3,
                   [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
                       const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
@@ -117,6 +135,47 @@ void Interpreter::install_secure_network_builtins(NetworkManager &network_manage
                       }
                   });
 
+    // Non-blocking handshake: begin prepares state (server also sends HELLO), step advances.
+    define_native("netSecureClientBegin", 2, 2,
+                  [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                      const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
+                      const std::string &password =
+                          require_secure_string(token, arguments[1], "netSecureClientBegin password");
+                      try {
+                          secure->begin_client_handshake(socket, password);
+                          return operation_result(true);
+                      } catch (const std::exception &exception) {
+                          secure->forget(socket);
+                          return operation_result(false, exception.what());
+                      }
+                  });
+
+    define_native("netSecureServerBegin", 2, 2,
+                  [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                      const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
+                      const std::string &password =
+                          require_secure_string(token, arguments[1], "netSecureServerBegin password");
+                      try {
+                          secure->begin_server_handshake(socket, password);
+                          return operation_result(true);
+                      } catch (const std::exception &exception) {
+                          secure->forget(socket);
+                          return operation_result(false, exception.what());
+                      }
+                  });
+
+    define_native("netSecureClientStep", 1, 1,
+                  [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                      const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
+                      return step_result_value(secure->step_client_handshake(socket));
+                  });
+
+    define_native("netSecureServerStep", 1, 1,
+                  [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                      const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
+                      return step_result_value(secure->step_server_handshake(socket));
+                  });
+
     define_native("netSecureSendLine", 2, 3,
                   [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
                       const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
@@ -126,6 +185,7 @@ void Interpreter::install_secure_network_builtins(NetworkManager &network_manage
                           const std::size_t sent = secure->send_line(socket, text, timeout);
                           return secure_send_result("sent", sent);
                       } catch (const std::exception &exception) {
+                          secure->forget(socket);
                           return secure_send_result("error", 0, exception.what());
                       }
                   });
@@ -144,6 +204,12 @@ void Interpreter::install_secure_network_builtins(NetworkManager &network_manage
                   [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
                       const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
                       return Value(secure->active(socket));
+                  });
+
+    define_native("netSecurePending", 1, 1,
+                  [secure](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                      const NetworkManager::Handle socket = require_secure_handle(token, arguments[0]);
+                      return Value(secure->handshake_pending(socket));
                   });
 
     define_native("netSecureForget", 1, 1,

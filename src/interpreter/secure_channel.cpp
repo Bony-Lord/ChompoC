@@ -461,34 +461,22 @@ void send_all(NetworkManager &network, NetworkManager::Handle socket, std::strin
     }
 }
 
-std::string wait_for_line(NetworkManager &network, NetworkManager::Handle socket, int timeout_ms,
-                          std::string_view description) {
-    if (timeout_ms < -1)
-        throw std::runtime_error("secure handshake timeout must be -1 or non-negative");
-
-    const auto started = std::chrono::steady_clock::now();
-    while (true) {
-        NetworkManager::ReceiveResult result = network.receive_line(socket);
-        if (result.status == NetworkManager::ReceiveStatus::Data)
-            return std::move(result.data);
-        if (result.status == NetworkManager::ReceiveStatus::Closed)
-            throw std::runtime_error("connection closed during " + std::string(description));
-
-        int wait_ms = 50;
-        if (timeout_ms >= 0) {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - started);
-            const long long remaining = static_cast<long long>(timeout_ms) - elapsed.count();
-            if (remaining <= 0)
-                throw std::runtime_error(std::string(description) + " timed out");
-            wait_ms = static_cast<int>(std::min<long long>(remaining, wait_ms));
-        }
-        network.poll({socket}, wait_ms);
-    }
-}
 }
 
 struct SecureChannelManager::Impl {
+    enum class HandshakeRole {
+        Client,
+        Server
+    };
+
+    enum class HandshakePhase {
+        // Client waits for CHOMPO-SECURE-2 hello, then sends KEY, then waits for READY.
+        WaitServerHello,
+        WaitServerReady,
+        // Server has sent hello and waits for CHOMPO-KEY-2.
+        WaitClientKey
+    };
+
     struct Session {
         Key key{};
         NoncePrefix send_prefix{};
@@ -499,21 +487,34 @@ struct SecureChannelManager::Impl {
         std::uint64_t receive_counter = 0;
     };
 
+    struct PendingHandshake {
+        HandshakeRole role = HandshakeRole::Client;
+        HandshakePhase phase = HandshakePhase::WaitServerHello;
+        std::string password;
+        Salt salt{};
+        NoncePrefix server_prefix{};
+        Session session{};
+    };
+
     explicit Impl(NetworkManager &network_manager) : network(network_manager) {}
 
     NetworkManager &network;
     std::unordered_map<NetworkManager::Handle, Session> sessions;
+    std::unordered_map<NetworkManager::Handle, PendingHandshake> pending;
 
-    static std::string seal(Session &session, std::string_view plaintext) {
-        if (session.send_counter == std::numeric_limits<std::uint64_t>::max())
+    void clear_socket(NetworkManager::Handle socket) noexcept {
+        sessions.erase(socket);
+        pending.erase(socket);
+    }
+
+    // Seal with an explicit counter; does not mutate session counters.
+    static std::string seal_at(const Session &session, std::string_view plaintext, std::uint64_t counter) {
+        if (counter == std::numeric_limits<std::uint64_t>::max())
             throw std::runtime_error("secure channel send counter exhausted");
 
-        const std::uint64_t counter = session.send_counter;
         const Nonce nonce = make_nonce(session.send_prefix, counter);
         const std::string aad = make_aad(session.send_direction, counter);
         const SealedData sealed = encrypt_aes_gcm(session.key, nonce, aad, plaintext);
-        ++session.send_counter;
-
         const std::string ciphertext = sealed.ciphertext.empty() ? "-" : hex_encode(sealed.ciphertext);
         return std::string(FrameMarker) + " " + counter_hex(counter) + " " + ciphertext + " " +
                hex_encode(sealed.tag);
@@ -538,6 +539,11 @@ struct SecureChannelManager::Impl {
         ++session.receive_counter;
         return plaintext;
     }
+
+    void promote(NetworkManager::Handle socket, Session session) {
+        pending.erase(socket);
+        sessions.insert_or_assign(socket, std::move(session));
+    }
 };
 
 SecureChannelManager::SecureChannelManager(NetworkManager &network_manager)
@@ -545,44 +551,24 @@ SecureChannelManager::SecureChannelManager(NetworkManager &network_manager)
 
 SecureChannelManager::~SecureChannelManager() = default;
 
-void SecureChannelManager::client_handshake(NetworkManager::Handle socket, std::string_view password,
-                                            int timeout_ms) {
-    impl_->sessions.erase(socket);
+void SecureChannelManager::begin_client_handshake(NetworkManager::Handle socket, std::string_view password) {
+    if (password.empty())
+        throw std::runtime_error("secure channel password cannot be empty");
 
-    const std::string hello = wait_for_line(impl_->network, socket, timeout_ms, "secure client handshake");
-    const std::vector<std::string_view> hello_fields = split_fields(hello);
-    if (hello_fields.size() != 4 || hello_fields[0] != HelloMarker)
-        throw std::runtime_error("server does not support the Chompo secure chat protocol");
+    impl_->clear_socket(socket);
 
-    const Salt salt = hex_decode_array<SaltSize>(hello_fields[1], "secure handshake salt");
-    const NoncePrefix server_prefix =
-        hex_decode_array<NoncePrefixSize>(hello_fields[2], "secure server nonce prefix");
-    const std::uint32_t iterations = parse_iterations(hello_fields[3]);
-
-    Impl::Session session;
-    session.key = derive_key(password, salt, iterations);
-    random_bytes(session.send_prefix);
-    session.receive_prefix = server_prefix;
-    session.send_direction = std::string(ClientToServer);
-    session.receive_direction = std::string(ServerToClient);
-
-    const std::string authentication = Impl::seal(session, "AUTH");
-    const std::vector<std::string_view> auth_fields = split_fields(authentication);
-    const std::string key_message = std::string(KeyMarker) + " " + hex_encode(session.send_prefix) + " " +
-                                    std::string(auth_fields[1]) + " " + std::string(auth_fields[2]) + " " +
-                                    std::string(auth_fields[3]) + "\n";
-    send_all(impl_->network, socket, key_message, timeout_ms);
-
-    const std::string ready_frame = wait_for_line(impl_->network, socket, timeout_ms, "secure server proof");
-    if (Impl::open(session, ready_frame) != "READY")
-        throw std::runtime_error("server returned an invalid secure handshake proof");
-
-    impl_->sessions.insert_or_assign(socket, std::move(session));
+    Impl::PendingHandshake pending;
+    pending.role = Impl::HandshakeRole::Client;
+    pending.phase = Impl::HandshakePhase::WaitServerHello;
+    pending.password = std::string(password);
+    impl_->pending.insert_or_assign(socket, std::move(pending));
 }
 
-void SecureChannelManager::server_handshake(NetworkManager::Handle socket, std::string_view password,
-                                            int timeout_ms) {
-    impl_->sessions.erase(socket);
+void SecureChannelManager::begin_server_handshake(NetworkManager::Handle socket, std::string_view password) {
+    if (password.empty())
+        throw std::runtime_error("secure channel password cannot be empty");
+
+    impl_->clear_socket(socket);
 
     Salt salt{};
     NoncePrefix server_prefix{};
@@ -591,29 +577,218 @@ void SecureChannelManager::server_handshake(NetworkManager::Handle socket, std::
 
     const std::string hello = std::string(HelloMarker) + " " + hex_encode(salt) + " " +
                               hex_encode(server_prefix) + " " + std::to_string(Pbkdf2Iterations) + "\n";
-    send_all(impl_->network, socket, hello, timeout_ms);
+    // Short timeout: HELLO is tiny; if the send buffer is full something is very wrong.
+    send_all(impl_->network, socket, hello, 2000);
 
-    const std::string key_message = wait_for_line(impl_->network, socket, timeout_ms, "secure server handshake");
-    const std::vector<std::string_view> key_fields = split_fields(key_message);
-    if (key_fields.size() != 5 || key_fields[0] != KeyMarker)
-        throw std::runtime_error("client sent an invalid secure handshake response");
+    Impl::PendingHandshake pending;
+    pending.role = Impl::HandshakeRole::Server;
+    pending.phase = Impl::HandshakePhase::WaitClientKey;
+    pending.password = std::string(password);
+    pending.salt = salt;
+    pending.server_prefix = server_prefix;
+    impl_->pending.insert_or_assign(socket, std::move(pending));
+}
 
-    Impl::Session session;
-    session.key = derive_key(password, salt, Pbkdf2Iterations);
-    session.send_prefix = server_prefix;
-    session.receive_prefix =
-        hex_decode_array<NoncePrefixSize>(key_fields[1], "secure client nonce prefix");
-    session.send_direction = std::string(ServerToClient);
-    session.receive_direction = std::string(ClientToServer);
+SecureChannelManager::StepResult SecureChannelManager::step_client_handshake(NetworkManager::Handle socket) {
+    const auto pending_it = impl_->pending.find(socket);
+    if (pending_it == impl_->pending.end()) {
+        if (impl_->sessions.contains(socket))
+            return {StepStatus::Complete, {}};
+        return {StepStatus::Failed, "no pending client secure handshake"};
+    }
 
-    const std::string authentication = std::string(FrameMarker) + " " + std::string(key_fields[2]) + " " +
-                                       std::string(key_fields[3]) + " " + std::string(key_fields[4]);
-    if (Impl::open(session, authentication) != "AUTH")
-        throw std::runtime_error("client returned an invalid secure handshake proof");
+    Impl::PendingHandshake &pending = pending_it->second;
+    if (pending.role != Impl::HandshakeRole::Client)
+        return {StepStatus::Failed, "socket is not a client handshake"};
 
-    const std::string ready = Impl::seal(session, "READY") + "\n";
-    send_all(impl_->network, socket, ready, timeout_ms);
-    impl_->sessions.insert_or_assign(socket, std::move(session));
+    try {
+        if (pending.phase == Impl::HandshakePhase::WaitServerHello) {
+            NetworkManager::ReceiveResult result = impl_->network.receive_line(socket);
+            if (result.status == NetworkManager::ReceiveStatus::Wait)
+                return {StepStatus::Pending, {}};
+            if (result.status == NetworkManager::ReceiveStatus::Closed) {
+                impl_->clear_socket(socket);
+                return {StepStatus::Failed, "connection closed during secure client handshake"};
+            }
+
+            const std::vector<std::string_view> hello_fields = split_fields(result.data);
+            if (hello_fields.size() != 4 || hello_fields[0] != HelloMarker) {
+                impl_->clear_socket(socket);
+                return {StepStatus::Failed, "server does not support the Chompo secure chat protocol"};
+            }
+
+            const Salt salt = hex_decode_array<SaltSize>(hello_fields[1], "secure handshake salt");
+            const NoncePrefix server_prefix =
+                hex_decode_array<NoncePrefixSize>(hello_fields[2], "secure server nonce prefix");
+            const std::uint32_t iterations = parse_iterations(hello_fields[3]);
+
+            pending.session.key = derive_key(pending.password, salt, iterations);
+            random_bytes(pending.session.send_prefix);
+            pending.session.receive_prefix = server_prefix;
+            pending.session.send_direction = std::string(ClientToServer);
+            pending.session.receive_direction = std::string(ServerToClient);
+            pending.session.send_counter = 0;
+            pending.session.receive_counter = 0;
+
+            // AUTH is sealed at counter 0; commit counter after the KEY frame is fully sent.
+            const std::string authentication = Impl::seal_at(pending.session, "AUTH", 0);
+            const std::vector<std::string_view> auth_fields = split_fields(authentication);
+            const std::string key_message = std::string(KeyMarker) + " " +
+                                            hex_encode(pending.session.send_prefix) + " " +
+                                            std::string(auth_fields[1]) + " " +
+                                            std::string(auth_fields[2]) + " " +
+                                            std::string(auth_fields[3]) + "\n";
+            send_all(impl_->network, socket, key_message, 2000);
+            pending.session.send_counter = 1;
+            pending.phase = Impl::HandshakePhase::WaitServerReady;
+            return {StepStatus::Pending, {}};
+        }
+
+        if (pending.phase == Impl::HandshakePhase::WaitServerReady) {
+            NetworkManager::ReceiveResult result = impl_->network.receive_line(socket);
+            if (result.status == NetworkManager::ReceiveStatus::Wait)
+                return {StepStatus::Pending, {}};
+            if (result.status == NetworkManager::ReceiveStatus::Closed) {
+                impl_->clear_socket(socket);
+                return {StepStatus::Failed, "connection closed while waiting for secure server proof"};
+            }
+
+            if (Impl::open(pending.session, result.data) != "READY") {
+                impl_->clear_socket(socket);
+                return {StepStatus::Failed, "server returned an invalid secure handshake proof"};
+            }
+
+            Impl::Session session = std::move(pending.session);
+            impl_->promote(socket, std::move(session));
+            return {StepStatus::Complete, {}};
+        }
+
+        impl_->clear_socket(socket);
+        return {StepStatus::Failed, "invalid client handshake phase"};
+    } catch (const std::exception &exception) {
+        impl_->clear_socket(socket);
+        return {StepStatus::Failed, exception.what()};
+    }
+}
+
+SecureChannelManager::StepResult SecureChannelManager::step_server_handshake(NetworkManager::Handle socket) {
+    const auto pending_it = impl_->pending.find(socket);
+    if (pending_it == impl_->pending.end()) {
+        if (impl_->sessions.contains(socket))
+            return {StepStatus::Complete, {}};
+        return {StepStatus::Failed, "no pending server secure handshake"};
+    }
+
+    Impl::PendingHandshake &pending = pending_it->second;
+    if (pending.role != Impl::HandshakeRole::Server)
+        return {StepStatus::Failed, "socket is not a server handshake"};
+
+    try {
+        if (pending.phase != Impl::HandshakePhase::WaitClientKey) {
+            impl_->clear_socket(socket);
+            return {StepStatus::Failed, "invalid server handshake phase"};
+        }
+
+        NetworkManager::ReceiveResult result = impl_->network.receive_line(socket);
+        if (result.status == NetworkManager::ReceiveStatus::Wait)
+            return {StepStatus::Pending, {}};
+        if (result.status == NetworkManager::ReceiveStatus::Closed) {
+            impl_->clear_socket(socket);
+            return {StepStatus::Failed, "connection closed during secure server handshake"};
+        }
+
+        const std::vector<std::string_view> key_fields = split_fields(result.data);
+        if (key_fields.size() != 5 || key_fields[0] != KeyMarker) {
+            impl_->clear_socket(socket);
+            return {StepStatus::Failed, "client sent an invalid secure handshake response"};
+        }
+
+        Impl::Session session;
+        session.key = derive_key(pending.password, pending.salt, Pbkdf2Iterations);
+        session.send_prefix = pending.server_prefix;
+        session.receive_prefix =
+            hex_decode_array<NoncePrefixSize>(key_fields[1], "secure client nonce prefix");
+        session.send_direction = std::string(ServerToClient);
+        session.receive_direction = std::string(ClientToServer);
+        session.send_counter = 0;
+        session.receive_counter = 0;
+
+        const std::string authentication = std::string(FrameMarker) + " " + std::string(key_fields[2]) + " " +
+                                           std::string(key_fields[3]) + " " + std::string(key_fields[4]);
+        if (Impl::open(session, authentication) != "AUTH") {
+            impl_->clear_socket(socket);
+            return {StepStatus::Failed, "client returned an invalid secure handshake proof"};
+        }
+
+        const std::string ready = Impl::seal_at(session, "READY", session.send_counter) + "\n";
+        send_all(impl_->network, socket, ready, 2000);
+        ++session.send_counter;
+        impl_->promote(socket, std::move(session));
+        return {StepStatus::Complete, {}};
+    } catch (const std::exception &exception) {
+        impl_->clear_socket(socket);
+        return {StepStatus::Failed, exception.what()};
+    }
+}
+
+void SecureChannelManager::client_handshake(NetworkManager::Handle socket, std::string_view password,
+                                            int timeout_ms) {
+    begin_client_handshake(socket, password);
+
+    if (timeout_ms < -1)
+        throw std::runtime_error("secure handshake timeout must be -1 or non-negative");
+
+    const auto started = std::chrono::steady_clock::now();
+    while (true) {
+        StepResult result = step_client_handshake(socket);
+        if (result.status == StepStatus::Complete)
+            return;
+        if (result.status == StepStatus::Failed)
+            throw std::runtime_error(result.detail.empty() ? "secure handshake failed" : result.detail);
+
+        int wait_ms = 50;
+        if (timeout_ms >= 0) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started);
+            const long long remaining = static_cast<long long>(timeout_ms) - elapsed.count();
+            if (remaining <= 0) {
+                forget(socket);
+                throw std::runtime_error("secure handshake timed out");
+            }
+            wait_ms = static_cast<int>(std::min<long long>(remaining, wait_ms));
+        }
+        impl_->network.poll({socket}, wait_ms);
+    }
+}
+
+void SecureChannelManager::server_handshake(NetworkManager::Handle socket, std::string_view password,
+                                            int timeout_ms) {
+    begin_server_handshake(socket, password);
+
+    if (timeout_ms < -1)
+        throw std::runtime_error("secure handshake timeout must be -1 or non-negative");
+
+    const auto started = std::chrono::steady_clock::now();
+    while (true) {
+        StepResult result = step_server_handshake(socket);
+        if (result.status == StepStatus::Complete)
+            return;
+        if (result.status == StepStatus::Failed)
+            throw std::runtime_error(result.detail.empty() ? "secure handshake failed" : result.detail);
+
+        int wait_ms = 50;
+        if (timeout_ms >= 0) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started);
+            const long long remaining = static_cast<long long>(timeout_ms) - elapsed.count();
+            if (remaining <= 0) {
+                forget(socket);
+                throw std::runtime_error("secure handshake timed out");
+            }
+            wait_ms = static_cast<int>(std::min<long long>(remaining, wait_ms));
+        }
+        impl_->network.poll({socket}, wait_ms);
+    }
 }
 
 std::size_t SecureChannelManager::send_line(NetworkManager::Handle socket, std::string_view plaintext,
@@ -622,8 +797,22 @@ std::size_t SecureChannelManager::send_line(NetworkManager::Handle socket, std::
     if (iterator == impl_->sessions.end())
         throw std::runtime_error("network handle has no active secure channel");
 
-    const std::string frame = Impl::seal(iterator->second, plaintext) + "\n";
-    send_all(impl_->network, socket, frame, timeout_ms);
+    Impl::Session &session = iterator->second;
+    if (session.send_counter == std::numeric_limits<std::uint64_t>::max()) {
+        impl_->clear_socket(socket);
+        throw std::runtime_error("secure channel send counter exhausted");
+    }
+
+    const std::uint64_t counter = session.send_counter;
+    const std::string frame = Impl::seal_at(session, plaintext, counter) + "\n";
+    try {
+        send_all(impl_->network, socket, frame, timeout_ms);
+    } catch (...) {
+        // Partial or failed send leaves the peer in an unknown state — kill the session.
+        impl_->clear_socket(socket);
+        throw;
+    }
+    ++session.send_counter;
     return plaintext.size();
 }
 
@@ -637,11 +826,11 @@ NetworkManager::ReceiveResult SecureChannelManager::receive_line(NetworkManager:
         try {
             result.data = Impl::open(iterator->second, result.data);
         } catch (...) {
-            impl_->sessions.erase(iterator);
+            impl_->clear_socket(socket);
             throw;
         }
     } else if (result.status == NetworkManager::ReceiveStatus::Closed) {
-        impl_->sessions.erase(iterator);
+        impl_->clear_socket(socket);
     }
     return result;
 }
@@ -650,6 +839,10 @@ bool SecureChannelManager::active(NetworkManager::Handle socket) const {
     return impl_->sessions.contains(socket);
 }
 
+bool SecureChannelManager::handshake_pending(NetworkManager::Handle socket) const {
+    return impl_->pending.contains(socket);
+}
+
 void SecureChannelManager::forget(NetworkManager::Handle socket) noexcept {
-    impl_->sessions.erase(socket);
+    impl_->clear_socket(socket);
 }
