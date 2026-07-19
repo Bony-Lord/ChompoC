@@ -2,6 +2,7 @@ var commandLine = args();
 var bindHost = "0.0.0.0";
 var bindPort = 4040;
 var historyLimit = 50;
+var roomPassword = NULL;
 
 if (len(commandLine) > 0)
     bindHost = commandLine[0];
@@ -9,6 +10,8 @@ if (len(commandLine) > 1)
     bindPort = Int(commandLine[1]);
 if (len(commandLine) > 2)
     historyLimit = Int(commandLine[2]);
+if (len(commandLine) > 3)
+    roomPassword = commandLine[3];
 if (historyLimit < 1)
     historyLimit = 1;
 
@@ -37,7 +40,7 @@ fun nameTaken(candidate) {
 }
 
 fun sendLine(handle, text) {
-    var result = netSendAll(handle, text + "\n", 2000);
+    var result = netSecureSendLine(handle, text, 2000);
     return result[0] == "sent";
 }
 
@@ -45,6 +48,7 @@ fun removeClientAt(index, announce) {
     var handle = clients[index];
     var name = names[index];
 
+    netSecureForget(handle);
     netClose(handle);
     removeAt(clients, index);
     removeAt(names, index);
@@ -94,8 +98,8 @@ fun registerName(handle, candidate) {
     if (len(candidate) == 0)
         return sendLine(handle, "ERROR name cannot be empty");
 
-    if (len(candidate) > 24)
-        return sendLine(handle, "ERROR name is longer than 24 bytes");
+    if (len(candidate) > 96)
+        return sendLine(handle, "ERROR name is too long");
 
     if (candidate[0] == '/')
         return sendLine(handle, "ERROR name cannot start with '/'");
@@ -163,8 +167,8 @@ fun processLine(handle, line) {
     if (len(line) == 0)
         return true;
 
-    if (len(line) > 1024) {
-        if (!sendLine(handle, "ERROR message is longer than 1024 bytes")) {
+    if (len(line) > 4096) {
+        if (!sendLine(handle, "ERROR message is too long")) {
             index = findClient(handle);
             if (index >= 0)
                 removeClientAt(index, true);
@@ -183,12 +187,16 @@ fun processLine(handle, line) {
 
 fun drainClient(handle) {
     while (true) {
-        var packet = netReceiveLine(handle);
+        var packet = netSecureReceiveLine(handle);
 
         if (packet[0] == "wait")
             return true;
 
         if (packet[0] == "closed" || packet[0] == "error") {
+            if (packet[0] == "error") {
+                print("SECURITY rejected client packet: ", packet[1], "\n");
+                flush();
+            }
             var index = findClient(handle);
             if (index >= 0)
                 removeClientAt(index, true);
@@ -208,17 +216,31 @@ fun acceptPending(listener) {
         if (client == NULL)
             return NULL;
 
-        push(clients, client);
-        push(names, NULL);
+        var secure = netSecureServer(client, roomPassword, 7000);
+        if (secure[0] != "ok") {
+            print("SECURITY rejected connection: ", secure[1], "\n");
+            flush();
+            netClose(client);
+        } else {
+            push(clients, client);
+            push(names, NULL);
 
-        if (!sendLine(client, "NAME choose a unique name"))
-            removeClientAt(len(clients) - 1, false);
+            if (!sendLine(client, "NAME choose a unique name"))
+                removeClientAt(len(clients) - 1, false);
+        }
     }
 }
 
 fun main() {
+    if (roomPassword == NULL || len(roomPassword) < 8) {
+        print("ERROR: provide a room password with at least 8 bytes.\n");
+        print("Usage: chat_server.chmp <host> <port> <history> <password>\n");
+        flush();
+        return NULL;
+    }
+
     var listener = netListen(bindHost, bindPort, 64);
-    print("LISTENING ", netPort(listener), "\n");
+    print("LISTENING ", netPort(listener), " SECURE AES-256-GCM\n");
     flush();
 
     while (true) {
