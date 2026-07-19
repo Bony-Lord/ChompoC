@@ -1068,21 +1068,25 @@ fun main() {
         var ready = netPoll(watched, 25);
         tickMs = tickMs + 25;
 
+        var acceptReady = false;
         for (var handle in ready) {
-            if (handle == listener) {
-                acceptPending(listener);
-            } else {
-                if (listContains(pending, handle)) {
-                    // stepped below for all pending; nothing extra
-                } else {
-                    if (findClient(handle) >= 0)
-                        drainClient(handle);
-                }
-            }
+            if (handle == listener)
+                acceptReady = true;
         }
+        if (acceptReady)
+            acceptPending(listener);
 
+        // Always step handshakes and drain clients. Buffered lines may already be
+        // in NetworkManager while the socket is no longer reported readable.
         if (!plaintextMode)
             stepPendingHandshakes();
+
+        var clientIndex = 0;
+        while (clientIndex < len(clients)) {
+            if (drainClient(clients[clientIndex]))
+                clientIndex++;
+            // drainClient removes the client on failure and shifts arrays.
+        }
 
         var console = termPoll(0);
         if (console[0] == "data")

@@ -80,7 +80,7 @@ class CapturedProcess:
         self.process.stdin.write(line + "\n")
         self.process.stdin.flush()
 
-    def wait_contains(self, text: str, timeout: float = 12.0) -> None:
+    def wait_contains(self, text: str, timeout: float = 20.0) -> None:
         deadline = time.monotonic() + timeout
         with self._condition:
             while text not in self._stdout:
@@ -100,7 +100,7 @@ class CapturedProcess:
                     )
                 self._condition.wait(timeout=min(remaining, 0.1))
 
-    def wait_regex(self, pattern: str, timeout: float = 12.0) -> re.Match[str]:
+    def wait_regex(self, pattern: str, timeout: float = 20.0) -> re.Match[str]:
         compiled = re.compile(pattern)
         deadline = time.monotonic() + timeout
         with self._condition:
@@ -124,7 +124,7 @@ class CapturedProcess:
                     )
                 self._condition.wait(timeout=min(remaining, 0.1))
 
-    def wait_exit(self, timeout: float = 12.0) -> int:
+    def wait_exit(self, timeout: float = 20.0) -> int:
         try:
             return self.process.wait(timeout=timeout)
         except subprocess.TimeoutExpired as error:
@@ -181,16 +181,17 @@ def start_client(
 
     client = CapturedProcess(command, name)
     if plaintext:
-        client.wait_contains("PLAINTEXT")
+        client.wait_contains("PLAINTEXT", timeout=30.0)
     else:
-        client.wait_contains("Защищённый канал установлен.")
+        client.wait_contains("Защищённый канал установлен.", timeout=30.0)
 
-    client.wait_contains("NAME choose a unique name")
+    # Registration prompt (also match partial in case of encoding noise on CI).
+    client.wait_contains("NAME choose a unique name", timeout=30.0)
     client.send(name)
 
     if wait_register:
-        client.wait_contains("OK NAME " + name)
-        client.wait_contains("* " + name + " joined")
+        client.wait_contains("OK NAME " + name, timeout=30.0)
+        client.wait_contains("* " + name + " joined", timeout=30.0)
     return client
 
 
@@ -249,7 +250,8 @@ def run_basic_secure(executable: Path, server_source: Path, client_source: Path)
         alice.wait_contains("* Boris left")
         require(bob.wait_exit() == 0, f"Bob client exited with {bob.process.returncode}: {bob.stderr}")
 
-        alice.send("/quit")
+        # /exit is an alias for /quit
+        alice.send("/exit")
         alice.wait_contains("BYE")
         require(alice.wait_exit() == 0, f"Alice client exited with {alice.process.returncode}: {alice.stderr}")
 

@@ -450,23 +450,23 @@ fun main() {
 
     var running = true;
     while (running) {
-        var ready = netPoll(Array{socket}, 25);
-        if (len(ready) > 0) {
-            while (true) {
-                var packet = receiveChatLine(socket);
-                if (packet[0] == "wait")
-                    break;
+        // Always drain the receive buffer first. After secure handshake, NAME may already
+        // sit in NetworkManager's line buffer while the socket is no longer "readable",
+        // so netPoll alone would miss it (flaky on Windows CI).
+        while (true) {
+            var packet = receiveChatLine(socket);
+            if (packet[0] == "wait")
+                break;
 
-                if (packet[0] != "data") {
-                    printPacket(packet);
-                    running = false;
-                    break;
-                }
+            if (packet[0] != "data") {
+                printPacket(packet);
+                running = false;
+                break;
+            }
 
-                if (!handleServerLine(socket, packet[1])) {
-                    running = false;
-                    break;
-                }
+            if (!handleServerLine(socket, packet[1])) {
+                running = false;
+                break;
             }
         }
 
@@ -474,8 +474,12 @@ fun main() {
             break;
 
         // Only accept chat/console input once registered (name prompts use termReadLine).
-        if (clientState != STATE_REGISTERED)
+        if (clientState != STATE_REGISTERED) {
+            netPoll(Array{socket}, 25);
             continue;
+        }
+
+        netPoll(Array{socket}, 25);
 
         var console = termPoll(0);
         if (console[0] == "data") {
