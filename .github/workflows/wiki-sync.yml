@@ -13,18 +13,22 @@ permissions:
   contents: write
 
 concurrency:
-  group: github-wiki-sync
+  group: github-wiki-sync-origin-main
   cancel-in-progress: true
 
 jobs:
   sync-wiki:
-    name: docs/wiki -> GitHub Wiki
+    name: origin/main docs/wiki -> GitHub Wiki
+    if: github.repository == 'Bony-Lord/ChompoC' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout origin/main
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
 
       - name: Validate Wiki source
         shell: bash
@@ -37,8 +41,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki; then
-            echo "::error::GitHub Wiki is not initialized. Enable Wikis in repository Settings and create the first Home page, then rerun this workflow."
+          if ! git clone "https://x-access-token:${GH_TOKEN}@github.com/Bony-Lord/ChompoC.wiki.git" wiki; then
+            echo "::error::GitHub Wiki is not initialized. Enable Wikis and create the first Home page, then rerun this workflow from main."
             exit 1
           fi
 
@@ -58,11 +62,9 @@ jobs:
           git add -A
 
           if git diff --cached --quiet; then
-            echo "GitHub Wiki is already synchronized."
+            echo "GitHub Wiki is already synchronized with origin/main."
             exit 0
           fi
 
-          git commit -m "Sync docs/wiki from ${SOURCE_SHA}"
+          git commit -m "Sync docs/wiki from origin/main ${SOURCE_SHA}"
           git push origin HEAD
-
-# The first synchronization requires an initialized GitHub Wiki repository.
