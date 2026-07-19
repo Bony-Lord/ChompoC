@@ -151,6 +151,19 @@ add_test(NAME system_args
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_args_suite.cmake)
 set_tests_properties(system_args PROPERTIES TIMEOUT 5)
 
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME langjam_chat
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/chat_smoke.py
+                    --executable $<TARGET_FILE:Chompo>
+                    --server ${CMAKE_CURRENT_SOURCE_DIR}/langjam/Chompo/chat_server.chmp
+                    --client ${CMAKE_CURRENT_SOURCE_DIR}/langjam/Chompo/chat_client.chmp)
+    set_tests_properties(langjam_chat PROPERTIES TIMEOUT 25)
+else()
+    message(STATUS "Python was not found; the LangJam end-to-end chat test is disabled")
+endif()
+
 add_executable(network_manager_test
         tests/network_manager_test.cpp
         src/interpreter/network_manager.cpp
