@@ -1,74 +1,112 @@
 # Network API
 
-Network API предоставляет неблокирующие TCP-сокеты через целочисленные handles.
+Chompo предоставляет неблокирующие TCP sockets через целочисленные handles. API рассчитан на однопоточный event loop.
 
 ## `netListen(host, port, backlog = 16)`
 
-Создаёт listener и возвращает его handle.
-
 ```javascript
-var listener = netListen("0.0.0.0", 4040);
+var listener = netListen("0.0.0.0", 4040, 64);
 ```
 
-`port = 0` просит ОС выбрать свободный порт. Его можно узнать через `netPort`.
+Порт `0` просит ОС выбрать свободный порт. Фактический порт возвращает `netPort(listener)`.
 
 ## `netConnect(host, port)`
-
-Подключается к TCP-серверу и возвращает socket handle.
 
 ```javascript
 var socket = netConnect("127.0.0.1", 4040);
 ```
 
+Подключение выполняется до возврата из функции, после чего socket переводится в неблокирующий режим.
+
 ## `netAccept(listener)`
 
-Возвращает новый socket handle или `NULL`, если ожидающих подключений нет.
+Возвращает новый socket handle или `NULL`, если ожидающих соединений сейчас нет. После события listener обычно вызывается в цикле до первого `NULL`, чтобы очистить accept queue.
 
 ## `netPoll(handles, timeoutMs = 0)`
-
-Ждёт готовность listener/socket handles и возвращает массив готовых handles.
 
 ```javascript
 var ready = netPoll(Array{listener, client}, 100);
 ```
 
-`timeoutMs`:
+Возвращает массив handles, для которых доступно чтение/accept или зафиксировано закрытие/error.
+
+Timeout:
 
 - `0` — не ждать;
-- положительное значение — ждать указанное число миллисекунд;
+- положительное значение — ждать миллисекунды;
 - `-1` — ждать без ограничения.
+
+Переданный массив handles читается как snapshot. Закрытый/неизвестный handle в списке является runtime-ошибкой.
 
 ## `netSend(socket, data)`
 
-Отправляет всю строку и возвращает число отправленных байт.
+```javascript
+var sent = netSend(socket, data);
+```
+
+Это низкоуровневая неблокирующая отправка. Она возвращает фактически записанное число байтов. При заполненном системном буфере результат может быть меньше `len(data)`, включая `0`.
+
+`netSend` не гарантирует полную доставку строки и не должен использоваться в чат-протоколе без самостоятельного учёта offset.
+
+## `netSendAll(socket, data, timeoutMs = 5000)`
 
 ```javascript
-netSend(socket, "hello\n");
+var result = netSendAll(socket, "hello\n", 2000);
 ```
+
+Повторяет partial sends до полного результата или остановки:
+
+```javascript
+Array{"sent", bytes}
+Array{"timeout", bytes}
+Array{"error", bytes, message}
+```
+
+`timeoutMs = -1` означает отсутствие лимита. Функция синхронна: пока она завершает одну отправку, интерпретатор не обрабатывает другие события. Чат ограничивает сообщения и использует timeout, поэтому один медленный клиент не блокирует сервер бесконечно.
 
 ## `netReceive(socket, maxBytes = 4096)`
 
-Читает до `maxBytes` байт. Максимум — 1 MiB.
-
-Результат:
+Читает до `maxBytes` байт, максимум 1 MiB:
 
 ```javascript
-Array{"data", "received text"}
+Array{"data", chunk}
 Array{"wait"}
 Array{"closed"}
 ```
 
+Необработанная socket-ошибка становится runtime-ошибкой. Для построчных серверных протоколов предпочтителен `netReceiveLine`.
+
 ## `netReceiveLine(socket)`
 
-Читает строку до `\n`. Символы `\n` и завершающий `\r` в результат не входят. Максимальный внутренний буфер строки — 1 MiB.
+Читает одну строку до `\n`. Завершающие `\n` и `\r` не входят в результат. Максимальный накопленный размер строки — 1 MiB.
+
+```javascript
+Array{"data", line}
+Array{"wait"}
+Array{"closed"}
+Array{"error", message}
+```
+
+Connection reset и другие ошибки возвращаются как `error`, а не завершают весь interpreter process. Сервер может закрыть только проблемного клиента.
+
+Один вызов может вернуть только одну строку. После `data` следует повторять `netReceiveLine` до `wait`, чтобы обработать все уже накопленные строки.
 
 ## `netPort(handle)`
 
-Возвращает локальный порт listener/socket.
+Возвращает локальный порт listener или socket.
 
 ## `netClose(handle)`
 
-Закрывает handle. Повторное использование закрытого handle является runtime-ошибкой.
+Закрывает handle и возвращает `NULL`. Повторное закрытие или использование закрытого handle является runtime-ошибкой.
+
+## Безопасная отправка строки
+
+```javascript
+fun sendLine(socket, text) {
+    var result = netSendAll(socket, text + "\n", 2000);
+    return result[0] == "sent";
+}
+```
 
 ## Event loop
 
@@ -77,23 +115,34 @@ var listener = netListen("0.0.0.0", 4040);
 var clients = Array{};
 
 while (true) {
-    var watched = Array{listener} + clients;
+    var watched = Array{listener};
+    for (var client in clients)
+        push(watched, client);
+
     var ready = netPoll(watched, 100);
 
     for (var handle in ready) {
         if (handle == listener) {
-            var client = netAccept(listener);
-            if (client != NULL)
+            while (true) {
+                var client = netAccept(listener);
+                if (client == NULL)
+                    break;
                 push(clients, client);
-            continue;
+            }
+        } else {
+            while (true) {
+                var packet = netReceiveLine(handle);
+                if (packet[0] == "wait")
+                    break;
+                if (packet[0] == "closed" || packet[0] == "error") {
+                    // найти handle, netClose(handle), removeAt(clients, index)
+                    break;
+                }
+                sendLine(handle, packet[1]);
+            }
         }
-
-        var packet = netReceiveLine(handle);
-
-        if (packet[0] == "data")
-            netSend(handle, packet[1] + "\n");
     }
 }
 ```
 
-Сокеты неблокирующие, но `netSend` при заполнении системного буфера может ждать готовности сокета к записи.
+Полная реализация: [LangJam Chat](LangJam-Chat).

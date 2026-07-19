@@ -1,6 +1,6 @@
 # Chompo Wiki
 
-Chompo — динамический язык с tree-walk интерпретатором на C++23. Файлы программ имеют расширение `.chmp`.
+Chompo — динамический язык с оптимизированным tree-walk интерпретатором на C++23. Файлы программ имеют расширение `.chmp`.
 
 ## Разделы
 
@@ -12,7 +12,9 @@ Chompo — динамический язык с tree-walk интерпретат
 - [Встроенные функции](Built-in-Functions)
 - [Ввод, вывод и файлы](Input-and-Output)
 - [Network API](Network-API)
-- [Ошибки, ограничения и производительность](Runtime-and-Performance)
+- [LangJam Chat](LangJam-Chat)
+- [Архитектура runtime](Runtime-Architecture)
+- [Runtime и производительность](Runtime-and-Performance)
 
 ## Минимальная программа
 
@@ -24,4 +26,8 @@ for (var value in values)
     print(value, "\n");
 ```
 
-Chompo использует динамические типы, лексические области видимости, функции первого класса, замыкания, изменяемые массивы, изменяемые по индексу строки, файловый I/O и TCP sockets.
+## Что поддерживается
+
+Chompo включает динамические типы, лексические scope, функции первого класса, closures, рекурсию, условия, `while`, `for-in`, изменяемые массивы, изменяемые по индексу byte strings, файловый I/O, command-line arguments и TCP sockets.
+
+Многопользовательский сервер и клиент полностью написаны на Chompo и находятся в `langjam/Chompo`.

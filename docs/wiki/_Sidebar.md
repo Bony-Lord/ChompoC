@@ -9,5 +9,6 @@
 - [Встроенные функции](Built-in-Functions)
 - [I/O](Input-and-Output)
 - [Network API](Network-API)
+- [LangJam Chat](LangJam-Chat)
 - [Архитектура runtime](Runtime-Architecture)
 - [Runtime и скорость](Runtime-and-Performance)
