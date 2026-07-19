@@ -1,0 +1,16 @@
+fun classify(value) {
+    var index = 0;
+    while (index < 5) {
+        index++;
+        if (index < 3)
+            continue;
+        if (value < 0)
+            return -1;
+        if (value == 0)
+            break;
+        return index;
+    }
+    return 0;
+}
+
+print(classify(-5), " ", classify(0), " ", classify(7), "\n");

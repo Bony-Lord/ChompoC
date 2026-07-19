@@ -1,0 +1,13 @@
+fun step(value, index) {
+    if (index % 2 == 0)
+        return (value + index + 1) % 1000000007;
+    return (value + index + 2) % 1000000007;
+}
+
+var value = 0;
+var index = 0;
+while (index < 200000) {
+    value = step(value, index);
+    index++;
+}
+print(value, "\n");

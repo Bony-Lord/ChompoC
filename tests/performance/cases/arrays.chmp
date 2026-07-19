@@ -1,0 +1,13 @@
+var values = Array{};
+var index = 0;
+while (index < 50000) {
+    push(values, index);
+    index++;
+}
+var checksum = 0;
+index = 0;
+while (index < 25000) {
+    checksum += pop(values);
+    index++;
+}
+print(checksum, " ", len(values), "\n");

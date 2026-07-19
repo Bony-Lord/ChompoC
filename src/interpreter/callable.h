@@ -52,6 +52,9 @@ public:
     bool accepts_arity(std::size_t count) const override;
 
 private:
+    static constexpr std::size_t MaxCachedFrames = 16;
+
     const FunctionStmt *declaration_;
     std::shared_ptr<Environment> closure_;
+    mutable std::vector<std::shared_ptr<Environment>> frame_pool_;
 };

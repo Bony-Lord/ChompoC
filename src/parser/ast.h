@@ -2,16 +2,21 @@
 
 #include "lexer/token.h"
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <variant>
 #include <vector>
 
 struct Expr;
 
 using ExprPtr = std::unique_ptr<Expr>;
+using CachedLiteral = std::variant<std::monostate, bool, std::int64_t, double, std::string, char>;
 
 struct LiteralExpr {
     Token value;
+    mutable bool decoded = false;
+    mutable CachedLiteral cached;
 };
 
 struct VariableExpr {
@@ -92,6 +97,7 @@ struct PrintStmt {
 
 struct BlockStmt {
     std::vector<StmtPtr> statements;
+    std::uint32_t scope_slots = 0;
 };
 
 struct IfStmt {

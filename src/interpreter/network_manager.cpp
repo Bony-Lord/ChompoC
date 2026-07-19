@@ -120,22 +120,6 @@ namespace {
 
         return result;
     }
-
-    void wait_until_writable(NativeSocket socket) {
-#ifdef _WIN32
-        WSAPOLLFD descriptor{};
-        descriptor.fd = socket;
-        descriptor.events = POLLWRNORM;
-        const int result = WSAPoll(&descriptor, 1, -1);
-#else
-        pollfd descriptor{};
-        descriptor.fd = socket;
-        descriptor.events = POLLOUT;
-        const int result = ::poll(&descriptor, 1, -1);
-#endif
-        if (result <= 0)
-            network_error("poll", last_socket_error());
-    }
 }
 
 struct NetworkManager::Impl {
@@ -389,10 +373,8 @@ std::size_t NetworkManager::send(Handle handle, std::string_view data) {
             throw std::runtime_error("socket closed while sending");
 
         const int error = last_socket_error();
-        if (is_would_block(error)) {
-            wait_until_writable(entry.socket);
-            continue;
-        }
+        if (is_would_block(error))
+            break;  // partial send — не блокируем однопоточный event loop
 
         network_error("send", error);
     }

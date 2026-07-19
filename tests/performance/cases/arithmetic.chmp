@@ -1,0 +1,7 @@
+var checksum = 0;
+var index = 0;
+while (index < 300000) {
+    checksum += (index % 97) * (index % 89);
+    index++;
+}
+print(checksum, "\n");

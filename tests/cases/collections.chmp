@@ -1,0 +1,13 @@
+var values = Array{};
+
+print(push(values, 1), " ", values, "\n");
+print(push(values, 2, 3), " ", values, "\n");
+
+var alias = values;
+print(push(alias, 4), " ", values, "\n");
+print(removeAt(values, 1), " ", alias, "\n");
+
+print(pop(values), " ", values, "\n");
+print(pop(values), " ", values, "\n");
+print(pop(values), " ", values, "\n");
+print(pop(values), " ", values, "\n");

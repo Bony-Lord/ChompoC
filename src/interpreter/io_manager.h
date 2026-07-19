@@ -16,11 +16,24 @@ public:
     static constexpr std::string_view AppendMode = "append";
     static constexpr std::string_view CreateMode = "create";
 
+    enum class InputStatus {
+        Data,
+        Wait,
+        Closed,
+    };
+
+    struct InputResult {
+        InputStatus status;
+        std::string data;
+    };
+
     IOManager(std::istream &standard_input, std::ostream &standard_output);
     ~IOManager();
 
     std::ostream &output_stream();
     std::optional<std::string> read_line();
+    InputResult poll_line(int timeout_ms = 0);
+    void flush();
 
     void set_input(std::string_view path = StandardPath);
     void set_output(std::string_view path = StandardPath, std::string_view mode = RewriteMode);
@@ -47,9 +60,12 @@ private:
     static std::unique_ptr<std::ifstream> open_input_file(std::string_view path);
     static std::unique_ptr<std::ofstream> open_output_file(std::string_view path, std::string_view mode);
 
+    bool standard_line_ready(int timeout_ms) const;
+
     std::istream &standard_input_;
     std::ostream &standard_output_;
     std::istream *input_;
+    bool standard_console_;
 
     std::unique_ptr<std::ifstream> input_file_;
     std::unique_ptr<std::ofstream> output_file_;

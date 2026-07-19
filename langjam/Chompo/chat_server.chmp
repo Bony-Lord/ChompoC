@@ -1,0 +1,241 @@
+var commandLine = args();
+var bindHost = "0.0.0.0";
+var bindPort = 4040;
+var historyLimit = 50;
+
+if (len(commandLine) > 0)
+    bindHost = commandLine[0];
+if (len(commandLine) > 1)
+    bindPort = Int(commandLine[1]);
+if (len(commandLine) > 2)
+    historyLimit = Int(commandLine[2]);
+if (historyLimit < 1)
+    historyLimit = 1;
+
+var clients = Array{};
+var names = Array{};
+var history = Array{};
+
+fun findClient(handle) {
+    var index = 0;
+    while (index < len(clients)) {
+        if (clients[index] == handle)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun nameTaken(candidate) {
+    var index = 0;
+    while (index < len(names)) {
+        if (names[index] == candidate)
+            return true;
+        index++;
+    }
+    return false;
+}
+
+fun sendLine(handle, text) {
+    var result = netSendAll(handle, text + "\n", 2000);
+    return result[0] == "sent";
+}
+
+fun removeClientAt(index, announce) {
+    var handle = clients[index];
+    var name = names[index];
+
+    netClose(handle);
+    removeAt(clients, index);
+    removeAt(names, index);
+
+    if (announce && name != NULL) {
+        var notice = "* " + name + " left";
+        print(notice, "\n");
+        flush();
+        broadcast(notice);
+    }
+}
+
+fun broadcast(text) {
+    var index = 0;
+    while (index < len(clients)) {
+        if (sendLine(clients[index], text)) {
+            index++;
+        } else {
+            removeClientAt(index, false);
+        }
+    }
+}
+
+fun appendHistory(text) {
+    push(history, text);
+    while (len(history) > historyLimit)
+        removeAt(history, 0);
+}
+
+fun sendHistory(handle) {
+    if (!sendLine(handle, "HISTORY " + String(len(history))))
+        return false;
+
+    for (var message in history) {
+        if (!sendLine(handle, message))
+            return false;
+    }
+
+    return sendLine(handle, "END");
+}
+
+fun registerName(handle, candidate) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (len(candidate) == 0)
+        return sendLine(handle, "ERROR name cannot be empty");
+
+    if (len(candidate) > 24)
+        return sendLine(handle, "ERROR name is longer than 24 bytes");
+
+    if (candidate[0] == '/')
+        return sendLine(handle, "ERROR name cannot start with '/'");
+
+    if (nameTaken(candidate))
+        return sendLine(handle, "ERROR name is already in use");
+
+    names[index] = candidate;
+
+    if (!sendLine(handle, "OK " + candidate)) {
+        removeClientAt(index, false);
+        return false;
+    }
+
+    if (!sendHistory(handle)) {
+        index = findClient(handle);
+        if (index >= 0)
+            removeClientAt(index, false);
+        return false;
+    }
+
+    var notice = "* " + candidate + " joined";
+    print(notice, "\n");
+    flush();
+    broadcast(notice);
+    return findClient(handle) >= 0;
+}
+
+fun processLine(handle, line) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (names[index] == NULL)
+        return registerName(handle, line);
+
+    if (line == "/quit") {
+        sendLine(handle, "BYE");
+        index = findClient(handle);
+        if (index >= 0)
+            removeClientAt(index, true);
+        return false;
+    }
+
+    if (line == "/help") {
+        if (!sendLine(handle, "COMMANDS /help /history /quit")) {
+            index = findClient(handle);
+            if (index >= 0)
+                removeClientAt(index, true);
+            return false;
+        }
+        return true;
+    }
+
+    if (line == "/history") {
+        if (!sendHistory(handle)) {
+            index = findClient(handle);
+            if (index >= 0)
+                removeClientAt(index, true);
+            return false;
+        }
+        return true;
+    }
+
+    if (len(line) == 0)
+        return true;
+
+    if (len(line) > 1024) {
+        if (!sendLine(handle, "ERROR message is longer than 1024 bytes")) {
+            index = findClient(handle);
+            if (index >= 0)
+                removeClientAt(index, true);
+            return false;
+        }
+        return true;
+    }
+
+    var message = names[index] + ": " + line;
+    appendHistory(message);
+    print(message, "\n");
+    flush();
+    broadcast(message);
+    return findClient(handle) >= 0;
+}
+
+fun drainClient(handle) {
+    while (true) {
+        var packet = netReceiveLine(handle);
+
+        if (packet[0] == "wait")
+            return true;
+
+        if (packet[0] == "closed" || packet[0] == "error") {
+            var index = findClient(handle);
+            if (index >= 0)
+                removeClientAt(index, true);
+            return false;
+        }
+
+        if (packet[0] == "data") {
+            if (!processLine(handle, packet[1]))
+                return false;
+        }
+    }
+}
+
+fun acceptPending(listener) {
+    while (true) {
+        var client = netAccept(listener);
+        if (client == NULL)
+            return NULL;
+
+        push(clients, client);
+        push(names, NULL);
+
+        if (!sendLine(client, "NAME choose a unique name"))
+            removeClientAt(len(clients) - 1, false);
+    }
+}
+
+fun main() {
+    var listener = netListen(bindHost, bindPort, 64);
+    print("LISTENING ", netPort(listener), "\n");
+    flush();
+
+    while (true) {
+        var watched = Array{listener};
+        for (var client in clients)
+            push(watched, client);
+
+        var ready = netPoll(watched, 100);
+        for (var handle in ready) {
+            if (handle == listener) {
+                acceptPending(listener);
+            } else {
+                if (findClient(handle) >= 0)
+                    drainClient(handle);
+            }
+        }
+    }
+}
+
+main();

@@ -1,0 +1,3 @@
+var target = Array{};
+var wrapper = Array{target};
+push(target, wrapper);

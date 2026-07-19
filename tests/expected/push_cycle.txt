@@ -1,0 +1,1 @@
+cyclic array references are not allowed

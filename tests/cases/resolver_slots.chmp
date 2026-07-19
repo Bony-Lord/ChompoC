@@ -1,0 +1,49 @@
+var root = 1;
+
+{
+    var root = 2;
+    print(root, "\n");
+
+    {
+        var extra = 3;
+        print(root + extra, "\n");
+    }
+}
+
+print(root, "\n");
+
+fun makeCounter(start) {
+    var value = start;
+
+    fun next() {
+        value++;
+        return value;
+    }
+
+    return next;
+}
+
+var counter = makeCounter(10);
+print(counter(), " ", counter(), "\n");
+
+{
+    fun factorial(value) {
+        if (value <= 1)
+            return 1;
+
+        return value * factorial(value - 1);
+    }
+
+    print(factorial(6), "\n");
+}
+
+fun skipEmptyScopes(value) {
+    {
+        {
+            value++;
+        }
+    }
+    return value;
+}
+
+print(skipEmptyScopes(40), "\n");

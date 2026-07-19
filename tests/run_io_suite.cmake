@@ -22,12 +22,14 @@ print(input(), "\n");
 
 ostream("output.txt", "rewrite");
 print("first");
+flush();
 
 ostream("output.txt", "append");
 print("+second");
 
 iostream("input.txt", "combined.txt", "create");
-print(input(), "\n");
+var filePacket = inputPoll(0);
+print(filePacket[0], " ", filePacket[1], "\n");
 print(input(), "\n");
 print(input(), "\n");
 
@@ -35,7 +37,8 @@ ostream("standart");
 print("console\n");
 
 istream("standart");
-print(input(), "\n");
+var standardPacket = inputPoll(0);
+print(standardPacket[0], " ", standardPacket[1], "\n");
 print(input(), "\n");
 ]=])
 
@@ -52,7 +55,7 @@ if(NOT actual_exit EQUAL 0)
 endif()
 
 string(REPLACE "\r\n" "\n" actual_stdout "${actual_stdout}")
-set(expected_stdout "standard-one\nconsole\nstandard-two\nNULL\n")
+set(expected_stdout "standard-one\nconsole\ndata standard-two\nNULL\n")
 if(NOT actual_stdout STREQUAL expected_stdout)
     message(FATAL_ERROR "Unexpected standard output.\nExpected:\n${expected_stdout}\nActual:\n${actual_stdout}")
 endif()
@@ -64,7 +67,7 @@ endif()
 
 file(READ "${combined_output_file}" actual_combined_output)
 string(REPLACE "\r\n" "\n" actual_combined_output "${actual_combined_output}")
-set(expected_combined_output "file-one\nfile-two\nNULL\n")
+set(expected_combined_output "data file-one\nfile-two\nNULL\n")
 if(NOT actual_combined_output STREQUAL expected_combined_output)
     message(FATAL_ERROR "iostream output mismatch.\nExpected:\n${expected_combined_output}\nActual:\n${actual_combined_output}")
 endif()

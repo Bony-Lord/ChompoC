@@ -22,12 +22,10 @@ std::string_view token_type_name(TokenType type) {
         return "Dot";
     case TokenType::Colon:
         return "Colon";
-
     case TokenType::PlusOne:
         return "PlusOne";
     case TokenType::MinusOne:
         return "MinusOne";
-
     case TokenType::PlusEq:
         return "PlusEq";
     case TokenType::MinusEq:
@@ -36,7 +34,6 @@ std::string_view token_type_name(TokenType type) {
         return "MulEq";
     case TokenType::DivideEq:
         return "DivideEq";
-
     case TokenType::Plus:
         return "Plus";
     case TokenType::Minus:
@@ -47,7 +44,6 @@ std::string_view token_type_name(TokenType type) {
         return "Slash";
     case TokenType::Percent:
         return "Percent";
-
     case TokenType::Equal:
         return "Equal";
     case TokenType::EqualEqual:
@@ -68,7 +64,6 @@ std::string_view token_type_name(TokenType type) {
         return "AndAnd";
     case TokenType::OrOr:
         return "OrOr";
-
     case TokenType::Identifier:
         return "Identifier";
     case TokenType::Number:
@@ -77,7 +72,6 @@ std::string_view token_type_name(TokenType type) {
         return "String";
     case TokenType::Char:
         return "Char";
-
     case TokenType::Var:
         return "Var";
     case TokenType::Print:
@@ -110,6 +104,11 @@ std::string_view token_type_name(TokenType type) {
         return "Return";
     case TokenType::Array:
         return "Array";
+    case TokenType::Class:
+        return "Class";
+    case TokenType::Count:
+        return "Count";
     }
+
     return "Unknown";
 }

@@ -5,7 +5,7 @@
 #include <utility>
 
 namespace {
-    const std::unordered_map<std::string, TokenType> keywords{
+    const std::unordered_map<std::string_view, TokenType> keywords{
         {"var", TokenType::Var},       {"print", TokenType::Print}, {"if", TokenType::If},
         {"else", TokenType::Else},     {"while", TokenType::While}, {"for", TokenType::For},
         {"return", TokenType::Return}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
@@ -29,7 +29,7 @@ char Lexer::peek_next() const {
     return source_[current_ + 1];
 }
 
-char Lexer::advance() { // if !is_at_end()
+char Lexer::advance() {
     const char cur_char = peek();
     ++current_;
 
@@ -43,10 +43,18 @@ char Lexer::advance() { // if !is_at_end()
 }
 
 void Lexer::add_token(TokenType type) {
-    tokens_.push_back(Token{type, source_.substr(start_, current_ - start_), start_position_});
+    Token token{type, source_.substr(start_, current_ - start_), start_position_};
+
+    if (type == TokenType::Identifier || type == TokenType::Array)
+        token.symbol = intern_symbol(token.lexeme);
+
+    tokens_.push_back(std::move(token));
 }
 
 std::vector<Token> Lexer::scan_tokens() {
+    if (tokens_.capacity() == 0)
+        tokens_.reserve(source_.size() / 3 + 1);
+
     while (!is_at_end()) {
         start_ = current_;
         start_position_ = current_position_;
@@ -65,10 +73,7 @@ bool Lexer::is_support_name(std::string_view s) {
             return false;
     }
 
-    if (keywords.contains(std::string(s)))
-        return false;
-
-    return true;
+    return !keywords.contains(s);
 }
 bool Lexer::is_digit(char c) { return c >= '0' && c <= '9'; }
 bool Lexer::is_alpha(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_'); }
@@ -95,11 +100,10 @@ void Lexer::number() {
 }
 
 void Lexer::identifier() {
-    while (is_alpha_numeric(peek())) {
+    while (is_alpha_numeric(peek()))
         advance();
-    }
 
-    const std::string text = source_.substr(start_, current_ - start_);
+    const std::string_view text(source_.data() + start_, current_ - start_);
     const auto keyword = keywords.find(text);
     if (keyword != keywords.end()) {
         add_token(keyword->second);
@@ -230,9 +234,8 @@ void Lexer::scan_token() {
 
     case '/':
         if (match('/')) {
-            while (peek() != '\n' && !is_at_end()) {
+            while (peek() != '\n' && !is_at_end())
                 advance();
-            }
         } else if (match('='))
             add_token(TokenType::DivideEq);
         else
@@ -288,6 +291,7 @@ void Lexer::scan_token() {
         else
             add_token(TokenType::OrOr);
         break;
+
     case '\'':
         char_literal();
         break;

@@ -37,18 +37,13 @@ jobs:
       - name: Install CMake and Ninja
         run: python -m pip install --disable-pip-version-check "cmake>=4.2,<5" ninja
 
-      - name: Show tool versions
-        run: |
-          cmake --version
-          ninja --version
-
-      - name: Configure
+      - name: Configure Debug
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 
-      - name: Build
+      - name: Build Debug
         run: cmake --build build --parallel
 
-      - name: Run tests
+      - name: Run functional tests
         run: ctest --test-dir build --output-on-failure --timeout 20
 
       - name: Upload CTest log on failure
@@ -59,3 +54,63 @@ jobs:
           path: build/Testing/Temporary/LastTest.log
           if-no-files-found: ignore
           retention-days: 7
+
+  performance-build:
+    name: ubuntu-latest / build Release benchmark binary
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/feature/slot-runtime' ||
+      (github.event_name == 'pull_request' && github.base_ref == 'feature/perf-wiki-push-pop')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install CMake and Ninja
+        run: python -m pip install --disable-pip-version-check "cmake>=4.2,<5" ninja
+
+      - name: Configure Release
+        run: cmake -S . -B build-perf -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Release binary
+        run: cmake --build build-perf --parallel --target Chompo
+
+      - name: Upload ready benchmark binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: chompo-release-${{ github.sha }}
+          path: build-perf/Chompo
+          if-no-files-found: error
+          retention-days: 1
+
+  performance-execution:
+    name: ubuntu-latest / execution-only TLE
+    needs: performance-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout benchmark sources
+        uses: actions/checkout@v4
+
+      - name: Download prebuilt Release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: chompo-release-${{ github.sha }}
+          path: benchmark-bin
+
+      - name: Restore executable permission
+        run: chmod +x benchmark-bin/Chompo
+
+      - name: Run measured execution only
+        run: >-
+          python3 tests/performance/run_performance_suite.py
+          --executable benchmark-bin/Chompo
+          --cases tests/performance/cases

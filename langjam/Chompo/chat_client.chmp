@@ -1,0 +1,120 @@
+var commandLine = args();
+var serverHost = "127.0.0.1";
+var serverPort = 4040;
+
+if (len(commandLine) > 0)
+    serverHost = commandLine[0];
+if (len(commandLine) > 1)
+    serverPort = Int(commandLine[1]);
+
+fun sendLine(socket, text) {
+    var result = netSendAll(socket, text + "\n", 2000);
+    return result[0] == "sent";
+}
+
+fun printPacket(packet) {
+    if (packet[0] == "data") {
+        print(packet[1], "\n");
+        flush();
+        return true;
+    }
+
+    if (packet[0] == "wait")
+        return true;
+
+    print("Disconnected from server.\n");
+    flush();
+    return false;
+}
+
+fun waitForGoodbye(socket) {
+    var attempts = 0;
+
+    while (attempts < 30) {
+        var ready = netPoll(Array{socket}, 100);
+        if (len(ready) > 0) {
+            while (true) {
+                var packet = netReceiveLine(socket);
+
+                if (packet[0] == "wait")
+                    break;
+
+                if (packet[0] != "data") {
+                    printPacket(packet);
+                    return NULL;
+                }
+
+                printPacket(packet);
+                if (packet[1] == "BYE")
+                    return NULL;
+            }
+        }
+
+        attempts++;
+    }
+
+    return NULL;
+}
+
+fun main() {
+    var socket = netConnect(serverHost, serverPort);
+
+    print("Name: ");
+    flush();
+    var name = input();
+    if (name == NULL) {
+        netClose(socket);
+        return NULL;
+    }
+
+    if (!sendLine(socket, name)) {
+        print("Failed to send name.\n");
+        netClose(socket);
+        return NULL;
+    }
+
+    var running = true;
+    while (running) {
+        var ready = netPoll(Array{socket}, 50);
+        if (len(ready) > 0) {
+            while (true) {
+                var packet = netReceiveLine(socket);
+                if (packet[0] == "wait")
+                    break;
+                if (!printPacket(packet)) {
+                    running = false;
+                    break;
+                }
+            }
+        }
+
+        if (!running)
+            break;
+
+        var console = inputPoll(0);
+        if (console[0] == "data") {
+            var line = console[1];
+            if (!sendLine(socket, line)) {
+                print("Failed to send message.\n");
+                flush();
+                running = false;
+            }
+
+            if (line == "/quit") {
+                waitForGoodbye(socket);
+                running = false;
+            }
+        } else {
+            if (console[0] == "closed") {
+                if (sendLine(socket, "/quit"))
+                    waitForGoodbye(socket);
+                running = false;
+            }
+        }
+    }
+
+    netClose(socket);
+    return NULL;
+}
+
+main();
