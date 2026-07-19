@@ -155,9 +155,9 @@ ctest --test-dir build --output-on-failure
 
 **Дополнительно реализовано** (для баллов по архитектуре и креативности):
 - Команды `/help`, `/history`, `/quit`
-- Timestamps
+- Optional room password (`AUTH`) и client-side шифрование тел сообщений
+- ANSI-оформление клиента (баннер, цвета, рамка ввода)
 - Корректная обработка отключения клиентов
-- Сохранение истории через `ostream(..., "append")`
 
 ## 🗺 Roadmap
 

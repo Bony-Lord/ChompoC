@@ -2,6 +2,7 @@ var commandLine = args();
 var bindHost = "0.0.0.0";
 var bindPort = 4040;
 var historyLimit = 50;
+var roomPassword = "";
 
 if (len(commandLine) > 0)
     bindHost = commandLine[0];
@@ -9,12 +10,32 @@ if (len(commandLine) > 1)
     bindPort = Int(commandLine[1]);
 if (len(commandLine) > 2)
     historyLimit = Int(commandLine[2]);
+if (len(commandLine) > 3)
+    roomPassword = commandLine[3];
 if (historyLimit < 1)
     historyLimit = 1;
 
 var clients = Array{};
 var names = Array{};
+var authed = Array{};
 var history = Array{};
+var roomLocked = len(roomPassword) > 0;
+
+var ESC = Char(27);
+var RESET = ESC + "[0m";
+var BOLD = ESC + "[1m";
+var DIM = ESC + "[2m";
+var GREEN = ESC + "[32m";
+var YELLOW = ESC + "[33m";
+var CYAN = ESC + "[36m";
+var BRIGHT_CYAN = ESC + "[96m";
+var BRIGHT_WHITE = ESC + "[97m";
+
+// Fixed-width ASCII chrome (column-aligned; total width 38).
+var BANNER_TOP = "+------------------------------------+";
+var BANNER_BOT = "+------------------------------------+";
+var BANNER_TITLE = "     Chompo Chat Server  v1         ";
+var BANNER_SUB = "   multi-user TCP room on Chompo    ";
 
 fun findClient(handle) {
     var index = 0;
@@ -48,22 +69,30 @@ fun removeClientAt(index, announce) {
     netClose(handle);
     removeAt(clients, index);
     removeAt(names, index);
+    removeAt(authed, index);
 
     if (announce && name != NULL) {
         var notice = "* " + name + " left";
-        print(notice, "\n");
+        print(DIM, CYAN, notice, RESET, "\n");
         flush();
         broadcast(notice);
     }
 }
 
 fun broadcast(text) {
+    // Only fully registered clients receive live traffic. Unnamed sockets
+    // (AUTH/NAME handshake) must not see messages here — they get history
+    // once after OK, otherwise the last room message would appear twice.
     var index = 0;
     while (index < len(clients)) {
-        if (sendLine(clients[index], text)) {
+        if (names[index] == NULL) {
             index++;
         } else {
-            removeClientAt(index, false);
+            if (sendLine(clients[index], text)) {
+                index++;
+            } else {
+                removeClientAt(index, false);
+            }
         }
     }
 }
@@ -118,16 +147,45 @@ fun registerName(handle, candidate) {
     }
 
     var notice = "* " + candidate + " joined";
-    print(notice, "\n");
+    print(DIM, CYAN, notice, RESET, "\n");
     flush();
     broadcast(notice);
     return findClient(handle) >= 0;
+}
+
+fun authenticate(handle, candidate) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (candidate != roomPassword) {
+        sendLine(handle, "ERROR wrong password");
+        removeClientAt(index, false);
+        return false;
+    }
+
+    authed[index] = true;
+
+    if (!sendLine(handle, "OK auth")) {
+        removeClientAt(index, false);
+        return false;
+    }
+
+    if (!sendLine(handle, "NAME choose a unique name")) {
+        removeClientAt(index, false);
+        return false;
+    }
+
+    return true;
 }
 
 fun processLine(handle, line) {
     var index = findClient(handle);
     if (index < 0)
         return false;
+
+    if (!authed[index])
+        return authenticate(handle, line);
 
     if (names[index] == NULL)
         return registerName(handle, line);
@@ -175,7 +233,7 @@ fun processLine(handle, line) {
 
     var message = names[index] + ": " + line;
     appendHistory(message);
-    print(message, "\n");
+    print(BRIGHT_WHITE, message, RESET, "\n");
     flush();
     broadcast(message);
     return findClient(handle) >= 0;
@@ -211,15 +269,57 @@ fun acceptPending(listener) {
         push(clients, client);
         push(names, NULL);
 
-        if (!sendLine(client, "NAME choose a unique name"))
-            removeClientAt(len(clients) - 1, false);
+        if (roomLocked) {
+            push(authed, false);
+            if (!sendLine(client, "AUTH enter room password"))
+                removeClientAt(len(clients) - 1, false);
+        } else {
+            push(authed, true);
+            if (!sendLine(client, "NAME choose a unique name"))
+                removeClientAt(len(clients) - 1, false);
+        }
     }
+}
+
+fun padRight(text, width) {
+    var result = text;
+    while (len(result) < width)
+        result = result + " ";
+    return result;
+}
+
+fun printStartup(listener) {
+    var port = netPort(listener);
+    var authLabel = "off (open room)";
+    if (roomLocked)
+        authLabel = "on (room password)";
+
+    print(BRIGHT_CYAN, BANNER_TOP, "\n", RESET);
+    print(BRIGHT_CYAN, "|", RESET, BOLD, BRIGHT_WHITE, BANNER_TITLE, RESET, BRIGHT_CYAN, "|\n", RESET);
+    print(BRIGHT_CYAN, "|", RESET, DIM, BANNER_SUB, RESET, BRIGHT_CYAN, "|\n", RESET);
+    print(BRIGHT_CYAN, BANNER_BOT, "\n", RESET);
+
+    print(DIM, "  ", padRight("host", 10), RESET, BOLD, bindHost, "\n", RESET);
+    print(DIM, "  ", padRight("port", 10), RESET, BOLD, String(port), "\n", RESET);
+    print(DIM, "  ", padRight("history", 10), RESET, BOLD, String(historyLimit), "\n", RESET);
+    print(DIM, "  ", padRight("auth", 10), RESET);
+    if (roomLocked)
+        print(YELLOW, BOLD, authLabel, RESET, "\n");
+    else
+        print(GREEN, authLabel, RESET, "\n");
+
+    print(DIM, "  ----------------------------------\n", RESET);
+    // Machine-readable status lines (tests and scripts parse these).
+    print(GREEN, BOLD, "LISTENING ", port, "\n", RESET);
+    if (roomLocked)
+        print(YELLOW, "AUTH required\n", RESET);
+    print(DIM, "  ready — waiting for clients\n", RESET);
+    flush();
 }
 
 fun main() {
     var listener = netListen(bindHost, bindPort, 64);
-    print("LISTENING ", netPort(listener), "\n");
-    flush();
+    printStartup(listener);
 
     while (true) {
         var watched = Array{listener};

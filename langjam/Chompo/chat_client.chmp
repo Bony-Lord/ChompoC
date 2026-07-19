@@ -1,30 +1,326 @@
 var commandLine = args();
 var serverHost = "127.0.0.1";
 var serverPort = 4040;
+var roomPassword = "";
 
 if (len(commandLine) > 0)
     serverHost = commandLine[0];
 if (len(commandLine) > 1)
     serverPort = Int(commandLine[1]);
+if (len(commandLine) > 2)
+    roomPassword = commandLine[2];
+
+var ESC = Char(27);
+var RESET = ESC + "[0m";
+var BOLD = ESC + "[1m";
+var DIM = ESC + "[2m";
+var RED = ESC + "[31m";
+var GREEN = ESC + "[32m";
+var YELLOW = ESC + "[33m";
+var BLUE = ESC + "[34m";
+var MAGENTA = ESC + "[35m";
+var CYAN = ESC + "[36m";
+var BRIGHT_CYAN = ESC + "[96m";
+var BRIGHT_WHITE = ESC + "[97m";
+
+var HEX = "0123456789abcdef";
+var ENC_PREFIX = "#E#";
+
+// Fixed-width ASCII chrome (column-aligned in any monospaced terminal).
+// Interior width = 36; total line width = 38 including borders.
+var BANNER_TOP = "+------------------------------------+";
+var BANNER_BOT = "+------------------------------------+";
+var BANNER_TITLE = "        Chompo Chat  v1             ";
+var BANNER_SUB = "  multi-user / optional room crypto ";
+var PROMPT_TEXT = "> ";
+
+var named = false;
+var running = true;
+var needPrompt = false;
+var promptOpen = false;
+var inHistory = false;
+var ownName = "";
 
 fun sendLine(socket, text) {
     var result = netSendAll(socket, text + "\n", 2000);
     return result[0] == "sent";
 }
 
+fun byteCode(character) {
+    var code = Int(character);
+    if (code < 0)
+        return code + 256;
+    return code;
+}
+
+fun hexDigit(value) {
+    return HEX[value];
+}
+
+fun hexValue(character) {
+    if (character >= '0' && character <= '9')
+        return byteCode(character) - byteCode('0');
+    if (character >= 'a' && character <= 'f')
+        return byteCode(character) - byteCode('a') + 10;
+    if (character >= 'A' && character <= 'F')
+        return byteCode(character) - byteCode('A') + 10;
+    return -1;
+}
+
+fun hexEncode(data) {
+    var chars = Array{};
+    var index = 0;
+    while (index < len(data)) {
+        var code = byteCode(data[index]);
+        push(chars, hexDigit(code / 16));
+        push(chars, hexDigit(code % 16));
+        index++;
+    }
+    return CATS(chars);
+}
+
+fun hexDecode(data) {
+    if (len(data) % 2 != 0)
+        return NULL;
+
+    var chars = Array{};
+    var index = 0;
+    while (index < len(data)) {
+        var high = hexValue(data[index]);
+        var low = hexValue(data[index + 1]);
+        if (high < 0 || low < 0)
+            return NULL;
+        push(chars, Char(high * 16 + low));
+        index = index + 2;
+    }
+    return CATS(chars);
+}
+
+fun encrypt(plain, key) {
+    if (len(key) == 0)
+        return plain;
+
+    var chars = Array{};
+    var index = 0;
+    while (index < len(plain)) {
+        var plainCode = byteCode(plain[index]);
+        var keyCode = byteCode(key[index % len(key)]);
+        push(chars, Char((plainCode + keyCode) % 256));
+        index++;
+    }
+    return ENC_PREFIX + hexEncode(CATS(chars));
+}
+
+fun decrypt(body, key) {
+    if (len(key) == 0)
+        return body;
+
+    if (len(body) < 3)
+        return body;
+
+    if (body[0] != '#' || body[1] != 'E' || body[2] != '#')
+        return body;
+
+    var payload = "";
+    var index = 3;
+    while (index < len(body)) {
+        payload = payload + body[index];
+        index++;
+    }
+
+    var cipher = hexDecode(payload);
+    if (cipher == NULL)
+        return body;
+
+    var chars = Array{};
+    index = 0;
+    while (index < len(cipher)) {
+        var cipherCode = byteCode(cipher[index]);
+        var keyCode = byteCode(key[index % len(key)]);
+        push(chars, Char((cipherCode - keyCode + 256) % 256));
+        index++;
+    }
+    return CATS(chars);
+}
+
+fun startsWith(text, prefix) {
+    if (len(text) < len(prefix))
+        return false;
+    var index = 0;
+    while (index < len(prefix)) {
+        if (text[index] != prefix[index])
+            return false;
+        index++;
+    }
+    return true;
+}
+
+fun findColon(text) {
+    var index = 0;
+    while (index < len(text)) {
+        if (text[index] == ':')
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun sliceFrom(text, start) {
+    var result = "";
+    var index = start;
+    while (index < len(text)) {
+        result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun sliceTo(text, end) {
+    var result = "";
+    var index = 0;
+    while (index < end) {
+        result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun printBanner() {
+    print(BRIGHT_CYAN, BANNER_TOP, "\n", RESET);
+    print(BRIGHT_CYAN, "|", RESET, BOLD, BRIGHT_WHITE, BANNER_TITLE, RESET, BRIGHT_CYAN, "|\n", RESET);
+    print(BRIGHT_CYAN, "|", RESET, DIM, BANNER_SUB, RESET, BRIGHT_CYAN, "|\n", RESET);
+    print(BRIGHT_CYAN, BANNER_BOT, "\n", RESET);
+    flush();
+}
+
+fun printPrompt() {
+    print(BLUE, BOLD, PROMPT_TEXT, RESET);
+    flush();
+    promptOpen = true;
+    needPrompt = false;
+}
+
+fun endPromptLine() {
+    if (promptOpen) {
+        print("\n");
+        flush();
+        promptOpen = false;
+    }
+}
+
+fun styleLine(line) {
+    if (startsWith(line, "ERROR "))
+        return RED + BOLD + line + RESET;
+
+    if (startsWith(line, "OK "))
+        return GREEN + BOLD + line + RESET;
+
+    if (line == "BYE")
+        return GREEN + BOLD + line + RESET;
+
+    if (startsWith(line, "AUTH "))
+        return YELLOW + line + RESET;
+
+    if (startsWith(line, "NAME "))
+        return YELLOW + line + RESET;
+
+    if (startsWith(line, "COMMANDS "))
+        return YELLOW + line + RESET;
+
+    if (startsWith(line, "HISTORY ") || line == "END")
+        return DIM + line + RESET;
+
+    if (startsWith(line, "* "))
+        return CYAN + DIM + line + RESET;
+
+    var colon = findColon(line);
+    if (colon > 0 && colon + 1 < len(line) && line[colon + 1] == ' ') {
+        var name = sliceTo(line, colon);
+        var body = sliceFrom(line, colon + 2);
+        var encrypted = startsWith(body, ENC_PREFIX);
+        var text = decrypt(body, roomPassword);
+        var label = "";
+        if (encrypted && len(roomPassword) > 0 && text != body)
+            label = DIM + " [enc]" + RESET;
+        else {
+            if (encrypted)
+                label = DIM + " [enc raw]" + RESET;
+        }
+        return MAGENTA + BOLD + name + RESET + DIM + ":" + RESET + " " + BRIGHT_WHITE + text + RESET + label;
+    }
+
+    return line;
+}
+
+fun isOwnLiveChat(line) {
+    // Skip server echo of our own chat lines (TTY already showed what we typed).
+    // History still shows our past messages (inHistory == true).
+    if (inHistory)
+        return false;
+    if (len(ownName) == 0)
+        return false;
+
+    var prefix = ownName + ": ";
+    if (!startsWith(line, prefix))
+        return false;
+
+    // Only user chat ("name: body"), not system lines.
+    return true;
+}
+
+// Print one inbound wire line exactly once. If a prompt is open mid-line,
+// finish that visual line first so traffic never smashes into "> ".
+fun printInbound(line) {
+    if (startsWith(line, "HISTORY "))
+        inHistory = true;
+
+    var skipPrint = isOwnLiveChat(line);
+
+    if (!skipPrint) {
+        endPromptLine();
+        print(styleLine(line), "\n");
+        flush();
+    }
+
+    if (line == "END")
+        inHistory = false;
+
+    // Defer the chat prompt during OK/HISTORY bootstrap so an empty "> "
+    // does not appear between registration lines when TCP delivers them
+    // across multiple poll rounds.
+    if (named && !inHistory) {
+        if (startsWith(line, "OK "))
+            needPrompt = false;
+        else
+            needPrompt = true;
+    }
+}
+
+fun printStatus(text, color) {
+    endPromptLine();
+    print(color, text, RESET);
+    flush();
+    if (named)
+        needPrompt = true;
+}
+
+fun handleDisconnect() {
+    endPromptLine();
+    print(RED, BOLD, "Disconnected from server.\n", RESET);
+    flush();
+    return false;
+}
+
 fun printPacket(packet) {
     if (packet[0] == "data") {
-        print(packet[1], "\n");
-        flush();
+        printInbound(packet[1]);
         return true;
     }
 
     if (packet[0] == "wait")
         return true;
 
-    print("Disconnected from server.\n");
-    flush();
-    return false;
+    return handleDisconnect();
 }
 
 fun waitForGoodbye(socket) {
@@ -56,24 +352,55 @@ fun waitForGoodbye(socket) {
     return NULL;
 }
 
-fun main() {
-    var socket = netConnect(serverHost, serverPort);
+fun prepareOutgoing(line) {
+    if (len(line) == 0)
+        return line;
 
-    print("Name: ");
+    if (line[0] == '/')
+        return line;
+
+    if (len(roomPassword) == 0)
+        return line;
+
+    return encrypt(line, roomPassword);
+}
+
+// Prompt for a display name and send it. Returns false on EOF/send failure.
+fun promptAndSendName(socket) {
+    print(CYAN, BOLD, "Name: ", RESET);
     flush();
     var name = input();
-    if (name == NULL) {
-        netClose(socket);
-        return NULL;
-    }
+    if (name == NULL)
+        return false;
+
+    // Pipe stdin does not echo the typed name; end the line so the next
+    // server reply is not glued to "Name: ".
+    print("\n");
+    flush();
 
     if (!sendLine(socket, name)) {
-        print("Failed to send name.\n");
-        netClose(socket);
-        return NULL;
+        printStatus("Failed to send name.\n", RED);
+        return false;
     }
 
-    var running = true;
+    return true;
+}
+
+fun main() {
+    printBanner();
+
+    print(DIM, "Connecting to ", RESET, BOLD, serverHost, ":", serverPort, RESET, " ...\n");
+    flush();
+
+    var socket = netConnect(serverHost, serverPort);
+
+    print(GREEN, "Connected.\n", RESET);
+    if (len(roomPassword) > 0)
+        print(DIM, "Room crypto: on (shared password)\n", RESET);
+    else
+        print(DIM, "Room crypto: off\n", RESET);
+    flush();
+
     while (running) {
         var ready = netPoll(Array{socket}, 50);
         if (len(ready) > 0) {
@@ -81,9 +408,66 @@ fun main() {
                 var packet = netReceiveLine(socket);
                 if (packet[0] == "wait")
                     break;
-                if (!printPacket(packet)) {
-                    running = false;
-                    break;
+
+                if (packet[0] == "data") {
+                    var line = packet[1];
+
+                    if (startsWith(line, "AUTH ")) {
+                        printInbound(line);
+                        var password = roomPassword;
+                        if (len(password) == 0) {
+                            print(YELLOW, "Room password: ", RESET);
+                            flush();
+                            password = input();
+                            if (password == NULL) {
+                                running = false;
+                                break;
+                            }
+                            // Pipe stdin does not echo; end the prompt line.
+                            print("\n");
+                            flush();
+                            roomPassword = password;
+                        }
+                        if (!sendLine(socket, password)) {
+                            printStatus("Failed to send password.\n", RED);
+                            running = false;
+                            break;
+                        }
+                    } else {
+                        if (startsWith(line, "NAME ")) {
+                            printInbound(line);
+                            if (!promptAndSendName(socket)) {
+                                running = false;
+                                break;
+                            }
+                        } else {
+                            if (startsWith(line, "OK ") && line != "OK auth" && !named) {
+                                named = true;
+                                ownName = sliceFrom(line, 3);
+                                needPrompt = true;
+                            }
+
+                            // Name rejected (empty, taken, too long, ...) — show
+                            // the error and offer Name: again without disconnecting.
+                            if (startsWith(line, "ERROR ") && !named) {
+                                printInbound(line);
+                                if (!promptAndSendName(socket)) {
+                                    running = false;
+                                    break;
+                                }
+                            } else {
+                                if (!printPacket(packet)) {
+                                    running = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    if (!printPacket(packet)) {
+                        running = false;
+                        break;
+                    }
                 }
             }
         }
@@ -91,12 +475,24 @@ fun main() {
         if (!running)
             break;
 
+        if (!named)
+            continue;
+
+        if (needPrompt && !promptOpen)
+            printPrompt();
+
         var console = inputPoll(0);
         if (console[0] == "data") {
+            // On a TTY, Enter already advanced the cursor (one extra blank line
+            // is acceptable). On a pipe there is no echo, so we must end the
+            // dangling "> " line or the next inbound print would smash into it.
+            endPromptLine();
+            needPrompt = true;
+
             var line = console[1];
-            if (!sendLine(socket, line)) {
-                print("Failed to send message.\n");
-                flush();
+            var outgoing = prepareOutgoing(line);
+            if (!sendLine(socket, outgoing)) {
+                printStatus("Failed to send message.\n", RED);
                 running = false;
             }
 
@@ -106,14 +502,20 @@ fun main() {
             }
         } else {
             if (console[0] == "closed") {
-                if (sendLine(socket, "/quit"))
-                    waitForGoodbye(socket);
+                if (named) {
+                    endPromptLine();
+                    if (sendLine(socket, "/quit"))
+                        waitForGoodbye(socket);
+                }
                 running = false;
             }
         }
     }
 
     netClose(socket);
+    endPromptLine();
+    print(DIM, "Goodbye.\n", RESET);
+    flush();
     return NULL;
 }
 
