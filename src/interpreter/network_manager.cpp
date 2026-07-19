@@ -91,7 +91,7 @@ namespace {
     struct AddressList {
         addrinfo *value = nullptr;
 
-        \~AddressList() {
+        ~AddressList() {
             if (value)
                 freeaddrinfo(value);
         }
@@ -151,7 +151,7 @@ struct NetworkManager::Impl {
 #endif
     }
 
-    \~Impl() {
+    ~Impl() {
         for (auto &[handle, entry] : entries) {
             (void) handle;
             close_native_socket(entry.socket);
@@ -194,7 +194,7 @@ struct NetworkManager::Impl {
 };
 
 NetworkManager::NetworkManager() : impl_(std::make_unique<Impl>()) {}
-NetworkManager::\~NetworkManager() = default;
+NetworkManager::~NetworkManager() = default;
 
 NetworkManager::Handle NetworkManager::listen(std::string_view host, std::uint16_t port, int backlog) {
     if (backlog <= 0)
