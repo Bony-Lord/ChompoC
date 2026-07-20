@@ -13,7 +13,7 @@
 
 **Chompo** — динамически типизированный язык с файлами `.chmp`, функциями первого класса, замыканиями, изменяемыми массивами и строками, файловым I/O и полноценным TCP API (включая реализованный многопользовательский чат).
 
-[Возможности](#-возможности) · [Быстрый старт](#-быстрый-старт) · [I/O](#-ввод-и-вывод) · [Network API](#-network-api) · [LangJam](#-готовность-к-langjam) · [Roadmap](#-roadmap)
+[Возможности](#-возможности) · [Быстрый старт](#-быстрый-старт) · [Пример](#-пример) · [Синтаксис](#-основной-синтаксис) · [I/O](#-ввод-и-вывод) · [Network API](#-network-api) · [LangJam](#-готовность-к-langjam) · [Roadmap](#-roadmap)
 
 </div>
 
@@ -105,20 +105,44 @@ for (var character in "Chompo") {
 
 Стандартный поток обозначается строкой `"standart"` (написание сохранено как часть текущего API).
 
-Поддерживаются режимы файлов: `rewrite`, `append`, `create`.
+Поддерживаются режимы файлов: `"rewrite"`, `"append"`, `"create"`.
 
 ## 🌐 Network API
 
 Использует TCP-сокеты хоста. Собственная VM не требуется.
 
-Ключевые функции: `netListen`, `netConnect`, `netAccept`, `netPoll`, `netSend`, `netReceive` / `netReceiveLine`, `netClose`.
+**Ключевые функции:** `netListen`, `netConnect`, `netAccept`, `netPoll`, `netSend`, `netReceive` / `netReceiveLine`, `netClose`, `netPort`.
 
-API синхронный, но сокеты неблокирующие. `netPoll` позволяет строить однопоточный event loop.
+API синхронный, но сокеты неблокирующие. `netPoll` позволяет строить однопоточный event loop для нескольких клиентов.
 
-**Минимальный echo-сервер** приведён в английской версии.
+**Пример минимального echo-сервера:**
+
+```javascript
+var listener = netListen("0.0.0.0", 4040);
+var clients = Array{};
+
+while (true) {
+    var watched = Array{listener} + clients;
+    var ready = netPoll(watched, 100);
+
+    for (var handle in ready) {
+        if (handle == listener) {
+            var client = netAccept(listener);
+            if (client != NULL)
+                clients += Array{client};
+            continue;
+        }
+
+        var packet = netReceiveLine(handle);
+
+        if (packet[0] == "data")
+            netSend(handle, packet[1] + "\n");
+    }
+}
+```
 
 > [!NOTE]
-> TCP-основа (`netPoll` + неблокирующие сокеты) полностью готова и использована для реализации многопользовательского чата.
+> Полноценный многопользовательский чат (с командами `/help`, `/history`, `/quit`, timestamps, сохранением истории и корректной обработкой отключений) реализован в `langjam/Chompo/`.
 
 ## 🏗 Архитектура
 
@@ -136,46 +160,44 @@ flowchart LR
     J --> K[poll-based event loop]
 ```
 
+Tree-walk интерпретатор полностью удовлетворяет требованию «компилятор или интерпретатор». Bytecode VM можно добавить позже для производительности.
+
 ## 🧪 Тестирование
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
-Набор включает golden-тесты, регрессионные тесты ошибок, файловый I/O и TCP loopback-тесты.
+Набор включает golden-тесты, регрессионные тесты ошибок, файловый I/O, TCP loopback и end-to-end тесты чата. GitHub Actions запускает сборку и тесты на Windows и Ubuntu.
 
 ## 🏁 Готовность к LangJam
 
 **✅ Все требования выполнены**
 
-- Язык с полной семантикой и синтаксисом
-- Многопользовательская чат-комната (сервер + клиент) полностью написана на Chompo
-- TCP API с `netPoll`-based event loop
-- Автоматические тесты на Windows и Linux
+- [x] Язык с полной семантикой и синтаксисом
+- [x] Многопользовательская чат-комната (сервер + клиент) полностью написана на Chompo
+- [x] TCP API с `netPoll`-based event loop
+- [x] Автоматические тесты на Windows и Linux
 
 **Дополнительно реализовано** (для баллов по архитектуре и креативности):
-- Команды `/help`, `/history`, `/quit`
-- Timestamps
-- Корректная обработка отключения клиентов
-- Сохранение истории через `ostream(..., "append")`
+- [x] Команды `/help`, `/history`, `/quit`
+- [x] Timestamps
+- [x] Корректная обработка отключения клиентов
+- [x] Сохранение истории через `ostream(..., "append")`
 
 ## 🗺 Roadmap
 
 ### До LangJam (выполнено)
-- [x] `while`, `for-in`, `break`, `continue`, `in`
-- [x] Потоковый и файловый I/O
-- [x] Строковые режимы `rewrite`, `append`, `create`
-- [x] TCP API и `netPoll`
-- [x] Законченный многопользовательский чат на Chompo
+- [x] Все конструкции управления, I/O, TCP, **многопользовательский чат**
 - [x] Submission package и demo
 
 ### После LangJam
-- [ ] `Map`/словари
+- [x] `Map`/словари
 - [ ] Модули и `import`
 - [ ] Exceptions языка
 - [ ] Unicode
 - [ ] Garbage collector для циклических графов
-- [ ] Bytecode compiler и VM только при реальной необходимости производительности
+- [ ] Bytecode VM (только при реальной необходимости производительности)
 - [ ] Actors/channels и полноценный async runtime
 - [ ] REPL, formatter, LSP и редакторские плагины
 
