@@ -174,31 +174,32 @@ Suite includes golden tests, error regressions, file I/O, TCP loopback, and end-
 
 **✅ All requirements fulfilled**
 
-- Full language with syntax and semantics
-- Multi-user chat room (server + client) implemented entirely in Chompo
-- TCP foundation with `netPoll`-based event loop
-- Automated tests on Windows and Linux
+- [x] Language with full syntax and semantics
+- [x] Multi-user chat room (server + client) implemented entirely in Chompo
+- [x] TCP foundation with `netPoll`-based event loop
+- [x] Automatic tests on Windows and Linux
 
 **Bonus features** (for architecture/creativity points):
-- Commands `/help`, `/history`, `/quit`
-- Timestamps
-- Graceful client disconnect handling
-- History persistence via `ostream(..., "append")`
+- [x] Commands `/help`, `/history`, `/quit`
+- [x] Timestamps
+- [x] Graceful client disconnect handling
+- [x] History persistence via `ostream(..., "append")`
 
 ## 🗺 Roadmap
 
 ### Before LangJam (completed)
-- All control flow, I/O, TCP, **multi-user chat**, submission package
+- [x] All control flow, I/O, TCP, **multi-user chat**
+- [x] Submission package and demo
 
 ### After LangJam
-- `Map`/dictionaries
-- Modules and `import`
-- Language exceptions
-- Unicode
-- Garbage collector for cyclic graphs
-- Bytecode VM (only if needed for performance)
-- Actors/channels + full async runtime
-- REPL, formatter, LSP, editor plugins
+- [ ] `Map`/dictionaries
+- [ ] Modules and `import`
+- [ ] Language exceptions
+- [ ] Unicode
+- [ ] Garbage collector for cyclic graphs
+- [ ] Bytecode VM (only if needed for performance)
+- [ ] Actors/channels + full async runtime
+- [ ] REPL, formatter, LSP, editor plugins
 
 ## 📄 License
 
