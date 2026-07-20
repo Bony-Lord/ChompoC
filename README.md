@@ -192,7 +192,7 @@ Suite includes golden tests, error regressions, file I/O, TCP loopback, and end-
 - [x] Submission package and demo
 
 ### After LangJam
-- [ ] `Map`/dictionaries
+- [x] `Map`/dictionaries
 - [ ] Modules and `import`
 - [ ] Language exceptions
 - [ ] Unicode
