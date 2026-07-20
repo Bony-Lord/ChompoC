@@ -1,0 +1,25 @@
+var empty = Map{};
+print(Type(empty), " ", len(empty), "\n");
+
+var m = Map{"a": 1, "b": 2};
+print(m["a"] + m["b"], "\n");
+print("a" in m, " ", "c" in m, "\n");
+
+m["c"] = 3;
+print(len(m), "\n");
+removeKey(m, "b");
+print("b" in m, " ", len(m), "\n");
+
+fun zero() {
+    return 0;
+}
+var def = Map(zero);
+print(def["missing"], "\n");
+def["missing"] = def["missing"] + 5;
+print(def["missing"], "\n");
+
+var t = clockTime();
+print(Type(t), " ", len(t), "\n");
+print(t[0] >= 0 && t[0] <= 23, "\n");
+print(t[1] >= 0 && t[1] <= 59, "\n");
+print(t[2] >= 0 && t[2] <= 59, "\n");

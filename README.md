@@ -59,16 +59,50 @@ ctest --test-dir build --output-on-failure
 ```
 
 ## ⚡ Example
+```
+fun makeCounter(start) {
+    var value = start;
 
-(Сохраняю твой пример из предыдущей версии)
+    fun next() {
+        value++;
+        return value;
+    }
 
+    return next;
+}
+
+var counter = makeCounter(10);
+var values = Array{counter(), counter()};
+push(values, 13);
+print(values, "\n"); // {11, 12, 13}
+```
 ## 🧩 Core Syntax
 
-(Сохраняю)
+Chompo uses a clean, expression-oriented syntax close to JavaScript/C with first-class functions and closures.
+Core constructs:
+fun name(params) { ... } — function declaration (closures supported)
+var x = ... — variable declaration with lexical scoping
+if / else, while, for-in, break, continue, return
+Arrays: Array{1, 2, 3}, indexing, push, pop, removeAt, len, in, concatenation and repetition
+Strings are mutable byte sequences with char indexing
+Everything is an expression where possible; functions are values
+Full syntax reference: docs/wiki/Language-Syntax.md
+Built-in functions: docs/wiki/Built-in-Functions.md
 
 ## 📥 Input and Output / 🌐 Network API
 
-(Оставляю как было — они уже хорошие)
+Chompo ships with powerful console/file I/O and a complete non-blocking TCP stack available directly from the language.
+I/O:
+input(), inputPoll(fd) — console input (pollable)
+istream / ostream / iostream — file streams (support "append" mode)
+flush()
+TCP (event-driven via netPoll):
+Listener and client sockets
+netSend / netSendAll (with timeout) returning {"sent", n}, {"timeout", n}, {"error", n, msg}
+netReceiveLine returning {"data", line}, {"wait"}, {"closed"} or {"error", msg}
+Full multi-user chat (server + client) implemented 100% in Chompo
+See detailed protocol handling and examples in langjam/Chompo/chat_server.chmp / chat_client.chmp.
+Complete reference: docs/wiki/Network-API.md and docs/wiki/LangJam-Chat.md
 
 ## 🏁 LangJam Readiness
 

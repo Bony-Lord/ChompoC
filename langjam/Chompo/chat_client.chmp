@@ -1,13 +1,63 @@
+// Chompo secure chat client — registration state machine, rooms, local mute.
+// Default: AES-256-GCM. Pass --plaintext only for explicit open mode.
+
 var commandLine = args();
 var serverHost = "127.0.0.1";
 var serverPort = 4040;
 // Set interactively at AUTH when the room is password-protected.
 var roomPassword = "";
 
-if (len(commandLine) > 0)
-    serverHost = commandLine[0];
-if (len(commandLine) > 1)
-    serverPort = Int(commandLine[1]);
+var ownName = "";
+var ownRole = "member";
+var currentRoom = "lobby";
+var muted = Array{};
+var pendingName = "";
+
+fun startsWith(text, prefix) {
+    if (len(text) < len(prefix))
+        return false;
+    var index = 0;
+    while (index < len(prefix)) {
+        if (text[index] != prefix[index])
+            return false;
+        index++;
+    }
+    return true;
+}
+
+fun sliceFrom(text, start) {
+    var result = "";
+    var index = start;
+    while (index < len(text)) {
+        result = result + text[index];
+        index++;
+    }
+    return result;
+}
+
+fun findChar(text, target, start) {
+    var index = start;
+    while (index < len(text)) {
+        if (text[index] == target)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listIndexOf(list, value) {
+    var index = 0;
+    while (index < len(list)) {
+        if (list[index] == value)
+            return index;
+        index++;
+    }
+    return -1;
+}
+
+fun listContains(list, value) {
+    return listIndexOf(list, value) >= 0;
+}
 
 var ESC = Char(27);
 var RESET = ESC + "[0m";
@@ -426,38 +476,92 @@ fun printPacket(packet) {
         return true;
     }
 
+    if (line == "/mutes") {
+        var body = "";
+        var m = 0;
+        while (m < len(muted)) {
+            if (m > 0)
+                body = body + " ";
+            body = body + muted[m];
+            m++;
+        }
+        if (len(body) == 0)
+            body = "(empty)";
+        termPrint("muted: " + body, "info");
+        return true;
+    }
+
+    return false;
+}
+
+fun printPacketLine(text) {
+    var clean = sanitizeRemote(text);
+
+    if (startsWith(clean, "ROLE "))
+        ownRole = sliceFrom(clean, 5);
+
+    if (startsWith(clean, "ROOM "))
+        currentRoom = sliceFrom(clean, 5);
+
+    var sender = parseChatSender(clean);
+    if (sender != NULL && listContains(muted, sender))
+        return true;
+
+    termPrint(clean, packetStyle(clean));
+    return true;
+}
+
+fun printPacket(packet) {
+    if (packet[0] == "data")
+        return printPacketLine(packet[1]);
+
     if (packet[0] == "wait")
         return true;
 
     return handleDisconnect();
 }
 
+fun promptForName(socket) {
+    var name = termReadLine("Имя › ", false, "accent");
+    if (name == NULL)
+        return false;
+    if (!sendChatLine(socket, name)) {
+        termPrint("Не удалось отправить имя.", "error");
+        return false;
+    }
+    pendingName = name;
+    clientState = STATE_WAIT_NAME_CONFIRM;
+    return true;
+}
+
 fun waitForGoodbye(socket) {
     var attempts = 0;
-
     while (attempts < 30) {
         var ready = netPoll(Array{socket}, 100);
         if (len(ready) > 0) {
             while (true) {
-                var packet = netReceiveLine(socket);
-
+                var packet = receiveChatLine(socket);
                 if (packet[0] == "wait")
                     break;
-
                 if (packet[0] != "data") {
                     printPacket(packet);
                     return NULL;
                 }
-
-                printPacket(packet);
+                printPacketLine(packet[1]);
                 if (packet[1] == "BYE")
                     return NULL;
             }
         }
-
         attempts++;
     }
+    return NULL;
+}
 
+fun closeClient(socket) {
+    forgetChatConnection(socket);
+    netClose(socket);
+    termSetPrompt("");
+    termClose();
     return NULL;
 }
 

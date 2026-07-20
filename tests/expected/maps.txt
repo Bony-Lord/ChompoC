@@ -1,0 +1,11 @@
+map 0
+3
+true false
+3
+false 2
+0
+5
+array 3
+true
+true
+true

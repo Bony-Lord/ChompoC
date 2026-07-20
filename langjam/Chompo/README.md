@@ -4,7 +4,7 @@ Chompo is a dynamically typed language implemented by a C++23 interpreter. The c
 
 Build the interpreter from the repository root with `cmake -S . -B build && cmake --build build --parallel`.
 
-## Files
+**Default mode is encrypted.** All chat traffic uses AES-256-GCM with a PBKDF2-derived key from a shared room password. The password is never sent over the wire after the secure handshake; it is used only for key derivation.
 
 - `chat_server.chmp` — multi-user server (rooms, roles, moderation);
 - `chat_client.chmp` — interactive client (ANSI UI, mute, optional crypto);
@@ -15,7 +15,7 @@ Build the interpreter from the repository root with `cmake -S . -B build && cmak
 Terminal 1 (open room, no password):
 
 ```bash
-./build/Chompo langjam/Chompo/chat_server.chmp 127.0.0.1 4040 50
+cmake -S . -B build && cmake --build build --parallel
 ```
 
 Terminal 1 (locked room):
@@ -27,7 +27,46 @@ Terminal 1 (locked room):
 Terminal 2 and later:
 
 ```bash
-./build/Chompo langjam/Chompo/chat_client.chmp 127.0.0.1 4040
+./build/Chompo langjam/Chompo/chat_client.chmp 127.0.0.1 4040 'your-long-password'
+```
+
+## Features
+
+- Secure transport (AES-256-GCM) with non-blocking server handshake
+- Interactive terminal UI (hidden password, editable UTF-8 input)
+- Rooms with per-room history (`/rooms`, `/room`, `/join`)
+- Roles: first registered user becomes **admin** (demo model; not production-safe)
+- Admin moderation: `/kick`, `/ban`, `/unban`, `/bans`, `/whitelist`
+- Local mute on the client: `/mute`, `/unmute`, `/mutes`
+- Statuses, DMs, nick changes, server console (`/say`, `/kick`, `/stop`)
+- UTF-8 nicknames and messages (including Cyrillic); names up to 48 bytes, no controls or `:`
+- Remote text sanitization (control characters / ESC stripped; UTF-8 preserved)
+
+## Client commands
+
+```text
+/help
+/history
+/users
+/rooms
+/room
+/join <room>
+/status [online|away|busy|dnd]
+/nick <name>
+/me <action>
+/msg <name> <message>
+/ping
+/kick <name>          (admin)
+/ban <name>           (admin)
+/unban <name>         (admin)
+/bans                 (admin)
+/whitelist on|off|add|remove|list   (admin)
+/mute <name>          (local)
+/unmute <name>        (local)
+/mutes                (local)
+/clear
+/quit
+/exit        (alias of /quit)
 ```
 
 On Windows with a multi-config generator, use `build\Debug\Chompo.exe` instead. Server arguments: optional `host`, `port`, `historyLimit`, `password`. Client arguments: optional `host`, `port`. When the server requires a password, the client prompts with a `Password: ` field, then `Name: `.

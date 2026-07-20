@@ -2,6 +2,7 @@
 #include "interpreter/interpreter.h"
 #include "interpreter/io_manager.h"
 #include "interpreter/network_manager.h"
+#include "interpreter/terminal_manager.h"
 #include "lexer/lexer.h"
 #include "lexer/token.h"
 #include "parser/ast_printer.h"
@@ -98,10 +99,13 @@ int main(int argc, char *argv[]) {
 
         IOManager io_manager(std::cin, std::cout);
         NetworkManager network_manager;
+        TerminalManager terminal_manager(io_manager, io_manager.output_stream());
         Interpreter interpreter(io_manager.output_stream());
         interpreter.install_collection_builtins();
         interpreter.install_io_builtins(io_manager);
         interpreter.install_network_builtins(network_manager);
+        interpreter.install_secure_network_builtins(network_manager);
+        interpreter.install_terminal_builtins(terminal_manager);
         interpreter.install_system_builtins(std::move(script_arguments));
         interpreter.interpret(program);
     } catch (const std::exception &exception) {

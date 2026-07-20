@@ -29,6 +29,10 @@ add_executable(Chompo
         src/interpreter/collection_builtins.cpp src/interpreter/system_builtins.cpp
         src/interpreter/io_manager.h src/interpreter/io_manager.cpp src/interpreter/io_builtins.cpp
         src/interpreter/network_manager.h src/interpreter/network_manager.cpp src/interpreter/network_builtins.cpp
+        src/interpreter/secure_channel.h src/interpreter/secure_channel.cpp
+        src/interpreter/secure_network_builtins.cpp
+        src/interpreter/terminal_manager.h src/interpreter/terminal_manager.cpp
+        src/interpreter/terminal_builtins.cpp
         src/interpreter/return_signal.h src/interpreter/loop_signal.h src/config.h
 )
 
@@ -80,7 +84,12 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(Chompo PRIVATE ws2_32)
+    # Winsock provides TCP; CNG/bcrypt provides PBKDF2, secure randomness and AES-256-GCM.
+    target_link_libraries(Chompo PRIVATE ws2_32 bcrypt)
+else()
+    # Linux uses the system OpenSSL crypto provider for the same protocol.
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    target_link_libraries(Chompo PRIVATE OpenSSL::Crypto)
 endif()
 
 include(CheckIPOSupported)
@@ -122,6 +131,7 @@ add_chompo_test(continue_outside_loop 1 TRUE)
 add_chompo_test(for_in 0 FALSE)
 add_chompo_test(regression 0 FALSE)
 add_chompo_test(collections 0 FALSE)
+add_chompo_test(maps 0 FALSE)
 add_chompo_test(push_cycle 1 TRUE)
 add_chompo_test(push_invalid_target 1 TRUE)
 add_chompo_test(pop_invalid_target 1 TRUE)

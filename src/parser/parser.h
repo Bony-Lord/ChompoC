@@ -75,6 +75,8 @@ private:
 
     ExprPtr array_literal();
     ExprPtr array_expression();
+    ExprPtr map_expression();
+    ExprPtr map_literal(const Token &map_token);
     ExprPtr prefix_update();
 
     // Infix-правила: токен продолжает левое выражение

@@ -13,7 +13,6 @@
 #include <string_view>
 #include <system_error>
 #include <type_traits>
-#include <unordered_set>
 #include <utility>
 #include <variant>
 
@@ -1069,6 +1068,19 @@ Interpreter::ResolvedTarget Interpreter::resolve_target(const Expr &expression) 
         if (existing != map->table.end())
             current = existing->second;
 
+        return ResolvedTarget{std::move(current), [map, index_value](Value value) {
+                                  map->table.insert_or_assign(index_value, std::move(value));
+                              }};
+    }
+
+    if (object.value.is_map()) {
+        const MapPtr map = std::get<MapPtr>(object.value.data);
+        if (!map)
+            throw RuntimeError(index->bracket, "operator '[]' cannot be applied to null map");
+        Value current(nullptr);
+        auto existing = map->table.find(index_value);
+        if (existing != map->table.end())
+            current = existing->second;
         return ResolvedTarget{std::move(current), [map, index_value](Value value) {
                                   map->table.insert_or_assign(index_value, std::move(value));
                               }};

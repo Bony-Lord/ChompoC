@@ -1,3 +1,6 @@
+// Chompo secure chat server — PR #17 crypto + PR #16 rooms/moderation.
+// Default transport is AES-256-GCM. Pass --plaintext for explicit open mode only.
+
 var commandLine = args();
 var bindHost = "0.0.0.0";
 var bindPort = 4040;
@@ -167,9 +170,13 @@ var banNames = Array{};
 var whitelistNames = Array{};
 
 fun findClient(handle) {
+    return listIndexOf(clients, handle);
+}
+
+fun findName(candidate) {
     var index = 0;
-    while (index < len(clients)) {
-        if (clients[index] == handle)
+    while (index < len(names)) {
+        if (names[index] == candidate)
             return index;
         index++;
     }
@@ -251,9 +258,57 @@ fun roomUserCount(roomName) {
     return count;
 }
 
-fun sendLine(handle, text) {
-    var result = netSendAll(handle, text + "\n", 2000);
-    return result[0] == "sent";
+fun isAdmin(index) {
+    if (index < 0 || index >= len(roles))
+        return false;
+    return roles[index] == "admin";
+}
+
+fun findRoom(name) {
+    return listIndexOf(roomList, name);
+}
+
+fun ensureRoom(name) {
+    var index = findRoom(name);
+    if (index >= 0)
+        return index;
+    push(roomList, name);
+    push(histories, Array{});
+    return len(roomList) - 1;
+}
+
+fun roomUserCount(roomName) {
+    var count = 0;
+    var index = 0;
+    while (index < len(rooms)) {
+        if (names[index] != NULL && rooms[index] == roomName)
+            count++;
+        index++;
+    }
+    return count;
+}
+
+fun promoteFirstAdmin() {
+    var index = 0;
+    while (index < len(roles)) {
+        if (names[index] != NULL && roles[index] == "admin")
+            return NULL;
+        index++;
+    }
+    index = 0;
+    while (index < len(names)) {
+        if (names[index] != NULL) {
+            roles[index] = "admin";
+            var notice = "* " + names[index] + " is now admin";
+            termPrint(notice, "system");
+            broadcastAll(notice);
+            if (sendChatLine(clients[index], "ROLE admin")) {
+            }
+            return NULL;
+        }
+        index++;
+    }
+    return NULL;
 }
 
 fun removeClientAt(index, announce) {
@@ -262,6 +317,7 @@ fun removeClientAt(index, announce) {
     var room = rooms[index];
     var wasAdmin = roles[index] == "admin";
 
+    forgetChatConnection(handle);
     netClose(handle);
     removeAt(clients, index);
     removeAt(names, index);
@@ -328,11 +384,11 @@ fun sendHistory(handle, roomName) {
         return false;
 
     for (var message in history) {
-        if (!sendLine(handle, message))
+        if (!sendChatLine(handle, message))
             return false;
     }
 
-    return sendLine(handle, "END");
+    return sendChatLine(handle, "END");
 }
 
 fun validName(candidate) {
@@ -390,8 +446,31 @@ fun registerName(handle, candidate) {
     if (whitelistOn && !mapHas(whitelist, candidate))
         return sendLine(handle, "ERROR name is not on the whitelist");
 
-    if (nameTaken(candidate))
-        return sendLine(handle, "ERROR name is already in use");
+fun registerName(handle, candidate) {
+    var index = findClient(handle);
+    if (index < 0)
+        return false;
+
+    if (len(candidate) == 0) {
+        nameError(handle, "cannot be empty");
+        return true;
+    }
+    if (!isSafeName(candidate, 48)) {
+        nameError(handle, "must be 1..48 bytes, UTF-8 ok, no controls or ':'");
+        return true;
+    }
+    if (candidate in banned) {
+        nameError(handle, "is banned");
+        return true;
+    }
+    if (whitelistOn && !(candidate in whitelist)) {
+        nameError(handle, "is not on the whitelist");
+        return true;
+    }
+    if (nameTaken(candidate)) {
+        nameError(handle, "is already in use");
+        return true;
+    }
 
     names[index] = candidate;
     rooms[index] = "lobby";
@@ -403,7 +482,7 @@ fun registerName(handle, candidate) {
     else
         roles[index] = "member";
 
-    if (!sendLine(handle, "OK " + candidate)) {
+    if (!sendChatLine(handle, "OK NAME " + candidate)) {
         removeClientAt(index, false);
         return false;
     }
@@ -846,15 +925,12 @@ fun processLine(handle, line) {
     if (len(line) == 0)
         return true;
 
-    if (len(line) > 1024) {
-        if (!sendLine(handle, "ERROR message is longer than 1024 bytes")) {
-            index = findClient(handle);
-            if (index >= 0)
-                removeClientAt(index, true);
-            return false;
-        }
+    if (len(line) > 4096)
+        return sendChatLine(handle, "ERROR message is too long");
+
+    var clean = sanitizeRemote(line);
+    if (len(clean) == 0)
         return true;
-    }
 
     var stamp = formatTime();
     var message = "[" + stamp + "] " + names[index] + ": " + line;
@@ -867,12 +943,14 @@ fun processLine(handle, line) {
 
 fun drainClient(handle) {
     while (true) {
-        var packet = netReceiveLine(handle);
+        var packet = receiveChatLine(handle);
 
         if (packet[0] == "wait")
             return true;
 
         if (packet[0] == "closed" || packet[0] == "error") {
+            if (packet[0] == "error")
+                termPrint("SECURITY rejected client packet: " + packet[1], "error");
             var index = findClient(handle);
             if (index >= 0)
                 removeClientAt(index, true);
@@ -882,6 +960,43 @@ fun drainClient(handle) {
         if (packet[0] == "data") {
             if (!processLine(handle, packet[1]))
                 return false;
+        }
+    }
+}
+
+fun promotePending(handle) {
+    push(clients, handle);
+    push(names, NULL);
+    push(statuses, "connecting");
+    push(roles, "member");
+    push(rooms, "lobby");
+
+    if (!sendChatLine(handle, "NAME choose a unique name"))
+        removeClientAt(len(clients) - 1, false);
+}
+
+fun stepPendingHandshakes() {
+    var index = 0;
+    while (index < len(pending)) {
+        var handle = pending[index];
+        var age = tickMs - pendingStarted[index];
+        if (age > HANDSHAKE_DEADLINE_MS) {
+            termPrint("SECURITY handshake timeout", "error");
+            removePendingAt(index);
+        } else {
+            var step = netSecureServerStep(handle);
+            if (step[0] == "pending") {
+                index++;
+            } else {
+                if (step[0] == "ok") {
+                    removeAt(pending, index);
+                    removeAt(pendingStarted, index);
+                    promotePending(handle);
+                } else {
+                    termPrint("SECURITY rejected connection: " + step[1], "error");
+                    removePendingAt(index);
+                }
+            }
         }
     }
 }
@@ -907,6 +1022,24 @@ fun acceptPending(listener) {
                 removeClientAt(len(clients) - 1, false);
         }
     }
+
+    if (line == "/stop")
+        return false;
+
+    termPrint("Unknown server command. Use /help.", "error");
+    return true;
+}
+
+fun closeAll(listener) {
+    broadcastAll("SERVER shutting down");
+    while (len(clients) > 0)
+        removeClientAt(0, false);
+    while (len(pending) > 0)
+        removePendingAt(0);
+    netClose(listener);
+    termSetPrompt("");
+    termClose();
+    return NULL;
 }
 
 fun padRight(text, width) {
@@ -946,24 +1079,65 @@ fun printStartup(listener) {
 }
 
 fun main() {
+    termOpen();
+    termSetTitle("Chompo Chat Server");
+
+    if (!plaintextMode) {
+        if (roomPassword == NULL || len(roomPassword) < MIN_PASSWORD_LEN) {
+            termPrint("ERROR: provide a room password with at least " + String(MIN_PASSWORD_LEN) + " bytes.", "error");
+            termPrint("Usage: chat_server.chmp [--plaintext] <host> <port> <history> <password>", "info");
+            termClose();
+            return NULL;
+        }
+    }
+
     var listener = netListen(bindHost, bindPort, 64);
     printStartup(listener);
 
-    while (true) {
+    if (plaintextMode)
+        termPrint("LISTENING " + String(netPort(listener)) + " PLAINTEXT", "warning");
+    else
+        termPrint("LISTENING " + String(netPort(listener)) + " SECURE AES-256-GCM", "success");
+
+    termSetPrompt("server › ", "warning");
+
+    var running = true;
+    while (running) {
         var watched = Array{listener};
         for (var client in clients)
             push(watched, client);
+        for (var p in pending)
+            push(watched, p);
 
-        var ready = netPoll(watched, 100);
+        var ready = netPoll(watched, 25);
+        tickMs = tickMs + 25;
+
+        var acceptReady = false;
         for (var handle in ready) {
-            if (handle == listener) {
-                acceptPending(listener);
-            } else {
-                if (findClient(handle) >= 0)
-                    drainClient(handle);
-            }
+            if (handle == listener)
+                acceptReady = true;
         }
+        if (acceptReady)
+            acceptPending(listener);
+
+        // Always step handshakes and drain clients. Buffered lines may already be
+        // in NetworkManager while the socket is no longer reported readable.
+        if (!plaintextMode)
+            stepPendingHandshakes();
+
+        var clientIndex = 0;
+        while (clientIndex < len(clients)) {
+            if (drainClient(clients[clientIndex]))
+                clientIndex++;
+            // drainClient removes the client on failure and shifts arrays.
+        }
+
+        var console = termPoll(0);
+        if (console[0] == "data")
+            running = processServerCommand(console[1]);
     }
+
+    return closeAll(listener);
 }
 
 main();

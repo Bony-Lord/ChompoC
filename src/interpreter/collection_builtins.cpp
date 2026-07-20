@@ -6,7 +6,6 @@
 #include <limits>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -88,6 +87,24 @@ void Interpreter::install_collection_builtins() {
                              array->erase(array->begin() + static_cast<std::ptrdiff_t>(index));
                              return removed;
                          })));
+
+    globals_->define(
+        "removeKey",
+        Value(std::make_shared<NativeFunction>(
+            "removeKey", 2, 2, [](Interpreter &, const Token &token, const std::vector<Value> &arguments) {
+                if (!arguments[0].is_map())
+                    throw RuntimeError(token, "removeKey requires map as the first argument, got " +
+                                                  arguments[0].type_name());
+                const MapPtr &map = std::get<MapPtr>(arguments[0].data);
+                if (!map)
+                    return Value(nullptr);
+                auto it = map->table.find(arguments[1]);
+                if (it == map->table.end())
+                    return Value(nullptr);
+                Value removed = std::move(it->second);
+                map->table.erase(it);
+                return removed;
+            })));
 
     globals_->define(
         "removeKey",

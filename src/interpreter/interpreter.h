@@ -13,6 +13,7 @@
 
 class IOManager;
 class NetworkManager;
+class TerminalManager;
 class UserFunction;
 
 class Interpreter {
@@ -24,6 +25,8 @@ public:
     void install_collection_builtins();
     void install_io_builtins(IOManager &io_manager);
     void install_network_builtins(NetworkManager &network_manager);
+    void install_secure_network_builtins(NetworkManager &network_manager);
+    void install_terminal_builtins(TerminalManager &terminal_manager);
     void install_system_builtins(std::vector<std::string> arguments);
     void interpret(const Program &program);
 
