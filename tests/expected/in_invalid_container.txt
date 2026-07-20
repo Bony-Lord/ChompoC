@@ -1,1 +1,1 @@
-right operand of 'in' must be array or string
+right operand of 'in' must be array, string, or map, got integer
