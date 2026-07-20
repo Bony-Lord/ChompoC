@@ -22,6 +22,8 @@
 
 **Русская версия** → [README_RU.md](README_RU.md)
 
+**Chat on this language**→ [README.md](langjam/Chompo/README.md) 
+
 ## ✨ Features
 
 | Subsystem      | Status | Capabilities |
