@@ -21,8 +21,6 @@ if (len(positionals) > 1)
 if (len(positionals) > 2)
     roomPassword = positionals[2];
 
-var MIN_PASSWORD_LEN = 12;
-
 // Client state machine:
 // CONNECTING -> SECURE_HANDSHAKE / PLAIN -> WAIT_NAME_PROMPT -> WAIT_NAME_CONFIRM -> REGISTERED
 var STATE_CONNECTING = "connecting";
@@ -168,10 +166,10 @@ fun packetStyle(text) {
         return "error";
     if (startsWith(text, "OK ") || startsWith(text, "PONG") || startsWith(text, "STATUS "))
         return "success";
-    if (startsWith(text, "COMMANDS") || startsWith(text, "USERS ") || startsWith(text, "USER ") ||
-        startsWith(text, "HISTORY ") || startsWith(text, "ROOMS ") || startsWith(text, "ROOM ") ||
-        startsWith(text, "ROLE ") || startsWith(text, "BANS ") || startsWith(text, "WHITELIST ") ||
-        text == "END")
+    if (startsWith(text, "COMMANDS") || startsWith(text, "HELP") || startsWith(text, "USERS ") ||
+        startsWith(text, "USER ") || startsWith(text, "HISTORY ") || startsWith(text, "ROOMS ") ||
+        startsWith(text, "ROOM ") || startsWith(text, "ROLE ") || startsWith(text, "BANS ") ||
+        startsWith(text, "WHITELIST ") || text == "END")
         return "info";
     if (startsWith(text, "[DM "))
         return "accent";
@@ -213,7 +211,21 @@ fun parseChatSender(line) {
     return name;
 }
 
+fun printLocalHelp() {
+    termPrint("HELP --- client ---", "info");
+    termPrint("HELP /mute <name> — скрыть сообщения пользователя у себя", "info");
+    termPrint("HELP /unmute <name> — снова показывать", "info");
+    termPrint("HELP /mutes — список локальных mute", "info");
+    termPrint("HELP /clear — очистить экран", "info");
+    return NULL;
+}
+
 fun handleLocalCommand(line) {
+    if (line == "/help") {
+        printLocalHelp();
+        return false;
+    }
+
     if (line == "/mute" || startsWith(line, "/mute ")) {
         if (line == "/mute") {
             termPrint("usage: /mute <name>", "warning");
@@ -426,8 +438,10 @@ fun main() {
         if (roomPassword == NULL)
             roomPassword = termReadLine("Пароль комнаты › ", true, "warning");
 
-        if (roomPassword == NULL || len(roomPassword) < MIN_PASSWORD_LEN) {
-            termPrint("Пароль комнаты должен содержать не менее " + String(MIN_PASSWORD_LEN) + " байт.", "error");
+        // Do not reject short passwords here — wrong length/value fails at handshake
+        // the same way as any incorrect password (no separate "too short" message).
+        if (roomPassword == NULL || len(roomPassword) == 0) {
+            termPrint("Пароль не может быть пустым.", "error");
             termClose();
             return NULL;
         }

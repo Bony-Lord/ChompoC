@@ -21,9 +21,9 @@ langjam/Chompo/chat_client.chmp
 1. bind host (`0.0.0.0`);
 2. port (`4040`; `0` = эфемерный);
 3. history limit (`50`);
-4. **room password** (минимум 12 байт).
+4. **room password** (сервер требует минимум 12 байт при старте).
 
-Аргументы клиента: host, port, password (если нет — скрытый prompt).
+Аргументы клиента: host, port, password (если нет — скрытый prompt). Клиент **не** проверяет длину пароля заранее: короткий/неверный пароль падает на secure handshake.
 
 Сервер печатает:
 

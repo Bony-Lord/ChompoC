@@ -14,9 +14,10 @@ Chompo is a dynamically typed language implemented by a C++23 interpreter. The c
 
 Supported platforms for the secure chat build: **Windows and Linux**.
 
-Password requirements:
+Password notes:
 
-- Minimum length: **12 bytes**
+- Server still requires a room password of at least **12 bytes** at startup
+- The client does **not** pre-check password length: a wrong or short password fails at secure handshake (same error path)
 - Shared-password designs are guessable offline from a captured handshake; use a long random secret for real use
 - There is **no automatic fallback** from secure to plaintext if the handshake fails
 
@@ -66,28 +67,27 @@ Terminal 2+ — client (host, port, password optional; if omitted, the client pr
 ## Client commands
 
 ```text
-/help
-/history
-/users
-/rooms
-/room
-/join <room>
-/status [online|away|busy|dnd]
-/nick <name>
-/me <action>
-/msg <name> <message>
-/ping
-/kick <name>          (admin)
-/ban <name>           (admin)
-/unban <name>         (admin)
-/bans                 (admin)
-/whitelist on|off|add|remove|list   (admin)
-/mute <name>          (local)
-/unmute <name>        (local)
-/mutes                (local)
-/clear
-/quit
-/exit        (alias of /quit)
+/help                              this list (server + local tips)
+/history                           room history
+/users                             who is online
+/rooms                             list rooms
+/room                              current room
+/join <room>                       switch room
+/status [online|away|busy|dnd]     set status
+/nick <name>                       rename (UTF-8 ok)
+/me <action>                       emote
+/msg <name> <message>              private message
+/ping                              PONG
+/kick <name>                       kick (admin)
+/ban <name>                        ban nick (admin)
+/unban <name>                      unban (admin)
+/bans                              ban list (admin)
+/whitelist on|off|add|remove|list  whitelist (admin)
+/mute <name>                       hide user locally
+/unmute <name>                     unhide
+/mutes                             local mute list
+/clear                             clear screen
+/quit, /exit                       leave chat
 ```
 
 ## Server console commands

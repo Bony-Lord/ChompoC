@@ -753,9 +753,45 @@ fun handleCommand(handle, index, line) {
         return false;
     }
 
-    if (cmd == "/help")
-        return sendChatLine(handle,
-            "COMMANDS /help /history /users /rooms /room /join /status /nick /me /msg /ping /kick /ban /unban /bans /whitelist /quit /exit");
+    if (cmd == "/help") {
+        if (!sendChatLine(handle, "HELP --- chat ---"))
+            return false;
+        if (!sendChatLine(handle, "HELP /help — эта справка"))
+            return false;
+        if (!sendChatLine(handle, "HELP /history — история текущей комнаты"))
+            return false;
+        if (!sendChatLine(handle, "HELP /users — кто онлайн (имя, статус, роль, комната)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /rooms — список комнат и число участников"))
+            return false;
+        if (!sendChatLine(handle, "HELP /room — текущая комната"))
+            return false;
+        if (!sendChatLine(handle, "HELP /join <room> — перейти в комнату (создаётся при первом входе)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /status [online|away|busy|dnd] — свой статус"))
+            return false;
+        if (!sendChatLine(handle, "HELP /nick <name> — сменить ник (UTF-8, без ':')"))
+            return false;
+        if (!sendChatLine(handle, "HELP /me <action> — действие от третьего лица"))
+            return false;
+        if (!sendChatLine(handle, "HELP /msg <name> <text> — личное сообщение (/dm)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /ping — проверка связи (PONG)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /kick <name> — выгнать (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /ban <name> — забанить ник (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /unban <name> — снять бан (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /bans — список банов (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /whitelist on|off|add|remove|list — белый список (admin)"))
+            return false;
+        if (!sendChatLine(handle, "HELP /quit, /exit — выйти из чата"))
+            return false;
+        return sendChatLine(handle, "HELP --- end ---");
+    }
 
     if (cmd == "/history") {
         if (!sendHistory(handle, rooms[index])) {
@@ -973,7 +1009,13 @@ fun processServerCommand(line) {
         return true;
 
     if (line == "/help") {
-        termPrint("SERVER COMMANDS /help /users /say <text> /kick <name> /clear /stop", "info");
+        termPrint("SERVER --- console ---", "info");
+        termPrint("/help — эта справка", "info");
+        termPrint("/users — подключённые клиенты и pending handshake", "info");
+        termPrint("/say <text> — сообщение во все комнаты от сервера", "info");
+        termPrint("/kick <name> — отключить пользователя", "info");
+        termPrint("/clear — очистить экран консоли", "info");
+        termPrint("/stop — остановить сервер", "info");
         return true;
     }
 
