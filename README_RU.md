@@ -21,6 +21,7 @@
 > Активная ветка разработки — `dev`. Требования LangJam (язык + многопользовательский чат) полностью выполнены.
 
 **English version** → [README.md](README.md)
+**Чат → [README.md](langjam/Chompo/README.md) **
 
 ## ✨ Возможности
 
