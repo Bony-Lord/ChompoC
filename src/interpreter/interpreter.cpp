@@ -4,6 +4,7 @@
 #include "runtime_error.h"
 
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -12,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -575,6 +577,15 @@ Interpreter::Interpreter(std::ostream &output, std::ostream &diagnostics)
     globals_->define("len", Value(make_native("len", 1, [](Interpreter &, const Token &token,
                                                             const std::vector<Value> &arguments) {
         return sequence_length(token, arguments[0]);
+    })));
+    globals_->define("sleep", Value(make_native("sleep", 1, [](Interpreter &, const Token &token,
+                                                            const std::vector<Value> &arguments) {
+        const Value& value = arguments[0];
+        if (!value.is_integer_number()) {
+            throw RuntimeError(token, "sleep expected integer number, got " + value.type_name());
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(value.number_as_integer()));
+        return Value(nullptr);
     })));
 }
 
