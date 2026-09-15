@@ -76,3 +76,7 @@ ipch/
 
 # (CLion)
 .idea/
+
+# clangd
+.cache/
+.clangd
